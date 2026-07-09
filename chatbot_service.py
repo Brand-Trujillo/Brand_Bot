@@ -15,16 +15,16 @@ def _fecha_texto(valor):
 
 
 def _resumen_fila(fila) -> str:
-    fecha = _fecha_texto(fila["FECHA_INGRESO"])
     return (
         f"Cliente: {fila['CLIENTE']}\n"
         f"Marca: {fila['MARCA']}\n"
         f"Descripcion: {fila['DESCRIPCION']}\n"
+        f"Marca: {fila['MARCA']}\n"
         f"Referencia / Modelo: {fila['REFERENCIA_MODELO']}\n"
+        f"Referencia externa: {fila['REFERENCIA']}\n"
         f"Referencia interna: {fila['IDENTIFICACION_INTERNA']}\n"
-        f"Ubicacion: {fila['UBICACION']}\n"
-        f"Estado: {fila['ESTADO']}\n"
-        f"Fecha: {fecha}"
+        f"Informe: {fila.get('INFORME', 'N/E')}\n"
+        f"Cotizacion: {fila.get('COTIZACION', 'N/E')}"
     )
 
 
@@ -34,41 +34,28 @@ def _formatear_multiples(resultado, intencion: str) -> str:
     for i, (_, fila) in enumerate(resultado.iterrows(), start=1):
         fecha = _fecha_texto(fila["FECHA_INGRESO"])
         if intencion == "ubicacion":
-            detalle = f"Marca: {fila['MARCA']} | Ubicacion: {fila['UBICACION']}"
+            detalle = _resumen_fila(fila)
         elif intencion == "estado":
-            detalle = f"Marca: {fila['MARCA']} | Estado: {fila['ESTADO']}"
+            detalle = _resumen_fila(fila)
         elif intencion == "fecha":
-            detalle = f"Marca: {fila['MARCA']} | Fecha: {fecha}"
+            detalle = _resumen_fila(fila)
         elif intencion == "cliente":
-            detalle = f"Cliente: {fila['CLIENTE']}"
+            detalle = _resumen_fila(fila)
         elif intencion == "descripcion":
-            detalle = f"Descripcion: {fila['DESCRIPCION']}"
+            detalle = _resumen_fila(fila)
         elif intencion == "referencia":
-            detalle = f"Referencia / Modelo: {fila['REFERENCIA_MODELO']}"
+            detalle = _resumen_fila(fila)
         elif intencion == "referencia_interna":
-            detalle = f"Referencia interna: {fila['IDENTIFICACION_INTERNA']}"
+            detalle = _resumen_fila(fila)
         elif intencion == "marca":
-            detalle = f"Marca: {fila['MARCA']}"
+            detalle = _resumen_fila(fila)
         elif intencion == "informe":
-            detalle = (
-                f"Informe: {fila.get('INFORME', 'N/E')} | "
-                f"Referencia / Modelo: {fila['REFERENCIA_MODELO']} | "
-                f"Referencia interna: {fila['IDENTIFICACION_INTERNA']}"
-            )
+            detalle = _resumen_fila(fila)
         elif intencion == "cotizacion":
-            detalle = (
-                f"Cotizacion: {fila.get('COTIZACION', 'N/E')} | "
-                f"Referencia / Modelo: {fila['REFERENCIA_MODELO']} | "
-                f"Referencia interna: {fila['IDENTIFICACION_INTERNA']}"
-            )
+            detalle = _resumen_fila(fila)
         else:
-            detalle = (
-                f"Cliente: {fila['CLIENTE']} | Marca: {fila['MARCA']} | "
-                f"Referencia / Modelo: {fila['REFERENCIA_MODELO']} | "
-                f"Referencia interna: {fila['IDENTIFICACION_INTERNA']} | "
-                f"Ubicacion: {fila['UBICACION']} | Estado: {fila['ESTADO']}"
-            )
-        bloques.append(f"{i}. {detalle}")
+            detalle = _resumen_fila(fila)
+        bloques.append(f"{i}.\n{detalle}")
 
     return "\n".join(bloques)
 
@@ -105,24 +92,24 @@ def responder_consulta(consulta: str) -> str:
 
     fila = resultado.iloc[0]
     if intencion == "ubicacion":
-        return f"La muestra esta en: {fila['UBICACION']}"
+        return _resumen_fila(fila)
     if intencion == "estado":
-        return f"El estado es: {fila['ESTADO']}"
+        return _resumen_fila(fila)
     if intencion == "fecha":
-        return f"La fecha de ingreso es: {_fecha_texto(fila['FECHA_INGRESO'])}"
+        return _resumen_fila(fila)
     if intencion == "cliente":
-        return f"El cliente es: {fila['CLIENTE']}"
+        return _resumen_fila(fila)
     if intencion == "descripcion":
-        return f"La descripcion es: {fila['DESCRIPCION']}"
+        return _resumen_fila(fila)
     if intencion == "referencia":
-        return f"La referencia / modelo es: {fila['REFERENCIA_MODELO']}"
+        return _resumen_fila(fila)
     if intencion == "referencia_interna":
-        return f"La referencia interna es: {fila['IDENTIFICACION_INTERNA']}"
+        return _resumen_fila(fila)
     if intencion == "marca":
-        return f"La marca es: {fila['MARCA']}"
+        return _resumen_fila(fila)
     if intencion == "informe":
-        return f"Informe: {fila.get('INFORME', 'N/E')}"
+        return _resumen_fila(fila)
     if intencion == "cotizacion":
-        return f"Cotizacion: {fila.get('COTIZACION', 'N/E')}"
+        return _resumen_fila(fila)
 
     return _resumen_fila(fila)
