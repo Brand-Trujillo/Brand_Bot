@@ -80,9 +80,8 @@ def buscar(df, texto):
     # Si hay tokens numéricos, priorizar búsqueda exacta en columnas numéricas/ID
     if numeric_tokens:
         # Columnas donde normalmente buscamos identificadores numéricos.
-        # Excluir `ITEM` para evitar matches erróneos (solicitado por el usuario).
-        cols_exact = ["NUMERO", "ID", "SERIE", "ITEM", "REFERENCIA"]
-        cols_exact = [c for c in cols_exact if c in df.columns and c.upper() != 'ITEM']
+        cols_exact = ["NUMERO", "ID", "SERIE", "REFERENCIA"]
+        cols_exact = [c for c in cols_exact if c in df.columns]
         import pandas as _pd
         mask_numeric = _pd.Series(True, index=df.index)
         for nt in numeric_tokens:
@@ -229,6 +228,7 @@ def buscar(df, texto):
         mask = mask & df["ESTADO"].astype(str).str.lower().str.contains(est, regex=False, na=False)
 
     # Para cada token textual restante, comprobar fuzzy match en todas las columnas
+    df_busqueda = df.drop(columns=[c for c in ["ITEM"] if c in df.columns])
     for t in text_tokens:
         def fila_coincide(fila):
             for val in fila:
@@ -242,7 +242,7 @@ def buscar(df, texto):
                     return True
             return False
 
-        mask_token = df.astype(str).apply(lambda fila: fila_coincide(fila.str.lower()), axis=1)
+        mask_token = df_busqueda.astype(str).apply(lambda fila: fila_coincide(fila.str.lower()), axis=1)
         mask = mask & mask_token
 
     resultados = df[mask]
