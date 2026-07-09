@@ -1,5 +1,8 @@
 import os
 import html
+import json
+import urllib.error
+import urllib.request
 from flask import Flask, jsonify, request, Response
 
 from datos import cargar_datos
@@ -10,6 +13,49 @@ from utilidades import extraer_busqueda
 
 app = Flask(__name__)
 df = cargar_datos()
+
+META_VERIFY_TOKEN = os.getenv("META_VERIFY_TOKEN", "")
+META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
+META_PHONE_NUMBER_ID = os.getenv("META_PHONE_NUMBER_ID", "")
+META_API_VERSION = os.getenv("META_API_VERSION", "v20.0")
+
+
+def _enviar_mensaje_meta(destino: str, texto: str) -> tuple[bool, str]:
+    """Envía un mensaje de texto por WhatsApp Cloud API."""
+    if not META_ACCESS_TOKEN or not META_PHONE_NUMBER_ID:
+        return False, "Faltan META_ACCESS_TOKEN o META_PHONE_NUMBER_ID."
+
+    endpoint = (
+        f"https://graph.facebook.com/{META_API_VERSION}/"
+        f"{META_PHONE_NUMBER_ID}/messages"
+    )
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": destino,
+        "type": "text",
+        "text": {"body": texto[:4096]},
+    }
+
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        endpoint,
+        data=data,
+        headers={
+            "Authorization": f"Bearer {META_ACCESS_TOKEN}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            _ = resp.read().decode("utf-8")
+        return True, "ok"
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        return False, f"HTTP {exc.code}: {detail}"
+    except Exception as exc:
+        return False, str(exc)
 
 
 def responder_consulta(consulta: str) -> str:
@@ -97,8 +143,14 @@ def health():
 
 @app.get("/webhook")
 def webhook_verify():
+    mode = request.args.get("hub.mode", "")
+    verify_token = request.args.get("hub.verify_token", "")
     challenge = request.args.get("hub.challenge", "")
-    return challenge or "ok"
+
+    if mode == "subscribe" and verify_token == META_VERIFY_TOKEN and challenge:
+        return Response(challenge, status=200, mimetype="text/plain")
+
+    return Response("forbidden", status=403)
 
 
 @app.post("/webhook")
@@ -122,7 +174,18 @@ def webhook_incoming():
                 value = changes[0].get("value", {})
                 messages = value.get("messages", [])
                 if messages:
-                    body = messages[0].get("text", {}).get("body")
+                    mensaje = messages[0]
+                    body = mensaje.get("text", {}).get("body")
+                    from_number = mensaje.get("from")
+
+                    if not body:
+                        body = "ayuda"
+
+                    reply = responder_consulta(body)
+                    ok, detail = _enviar_mensaje_meta(from_number, reply)
+                    if not ok:
+                        app.logger.error("Error enviando respuesta Meta: %s", detail)
+                    return jsonify({"status": "ok"})
 
     if not body:
         return jsonify({"status": "ok", "reply": ""})
