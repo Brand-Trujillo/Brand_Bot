@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brand Bot | Control de Muestras</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="bg-shape bg-shape-a"></div>
+  <div class="bg-shape bg-shape-b"></div>
+
+  <main class="layout">
+    <header class="brand">
+      <h1>Brand Bot</h1>
+      <p>Consulta muestras del laboratorio en tiempo real.</p>
+    </header>
+
+    <section class="chat-shell" aria-label="Chat del asistente">
+      <div id="chat" class="chat-feed" aria-live="polite">
+        <article class="bubble bot">
+          <h2>Asistente</h2>
+          <p>Hola. Puedes preguntarme por cliente, referencia, estado, ubicacion, marca, informe o cotizacion.</p>
+        </article>
+      </div>
+
+      <form id="chat-form" class="chat-form" autocomplete="off">
+        <label for="message" class="sr-only">Escribe tu pregunta</label>
+        <input id="message" name="message" type="text" placeholder="Ejemplo: estado de la muestra 123" required>
+        <button id="send-btn" type="submit">Enviar</button>
+      </form>
+    </section>
+  </main>
+
+  <script src="/static/chat.js"></script>
+</body>
+</html>

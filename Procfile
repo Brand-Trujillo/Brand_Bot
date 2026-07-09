@@ -1,1 +1,1 @@
-web: python whatsapp_api.py
+web: python web_app.py
