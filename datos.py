@@ -8,6 +8,11 @@ import urllib.request
 # Nombre del archivo de datos (se asume en la misma carpeta que el ejecutable/archivo)
 ARCHIVO = "Control de muestras_2026.xlsx"
 SHEET_NAME = "CONTROL_MUESTRAS_2026"
+DEFAULT_ONEDRIVE_XLSX_URL = (
+    "https://ainsp.sharepoint.com/:x:/r/sites/TodoNYCE/nycecolombia/"
+    "HSQ%20Interno/Muestras%20en%20custodia/F3T09-03%20Control%20de%20"
+    "muestras_2026.xlsx?d=w34336858a30b4b0a98962963a3631f0f&csf=1&web=1&e=r7iItR"
+)
 
 
 def _resource_path(rel_path: str) -> str:
@@ -57,7 +62,7 @@ def _cargar_desde_onedrive(url: str) -> pd.DataFrame:
 
 
 def cargar_datos():
-    onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", "").strip()
+    onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", DEFAULT_ONEDRIVE_XLSX_URL).strip()
 
     if onedrive_url:
         try:
