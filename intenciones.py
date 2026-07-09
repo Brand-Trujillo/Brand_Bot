@@ -70,7 +70,11 @@ def detectar_intencion(texto):
         "tipo", "descripción"
     ]
     referencia = [
-        "referencia", "ref", "codigo", "código", "folio"
+        "referencia", "ref", "codigo", "código", "folio", "modelo"
+    ]
+    referencia_interna = [
+        "referencia interna", "identificacion interna", "identificación interna",
+        "id interna", "interna", "codigo interno", "código interno"
     ]
     informe = ["informe", "informe tecnico", "reporte", "reporte tecnico", "report", "I", "i"]
     cotizacion = ["cotizacion", "cotización", "presupuesto", "valor", "cotizar"]
@@ -112,6 +116,8 @@ def detectar_intencion(texto):
         return "cliente"
     if contiene_lista(descripcion):
         return "descripcion"
+    if contiene_lista(referencia_interna):
+        return "referencia_interna"
     if contiene_lista(referencia):
         return "referencia"
     if contiene_lista(marca):

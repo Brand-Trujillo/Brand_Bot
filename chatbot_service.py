@@ -20,7 +20,8 @@ def _resumen_fila(fila) -> str:
         f"Cliente: {fila['CLIENTE']}\n"
         f"Marca: {fila['MARCA']}\n"
         f"Descripcion: {fila['DESCRIPCION']}\n"
-        f"Referencia: {fila['REFERENCIA']}\n"
+        f"Referencia / Modelo: {fila['REFERENCIA_MODELO']}\n"
+        f"Referencia interna: {fila['IDENTIFICACION_INTERNA']}\n"
         f"Ubicacion: {fila['UBICACION']}\n"
         f"Estado: {fila['ESTADO']}\n"
         f"Fecha: {fecha}"
@@ -43,17 +44,29 @@ def _formatear_multiples(resultado, intencion: str) -> str:
         elif intencion == "descripcion":
             detalle = f"Descripcion: {fila['DESCRIPCION']}"
         elif intencion == "referencia":
-            detalle = f"Referencia: {fila['REFERENCIA']}"
+            detalle = f"Referencia / Modelo: {fila['REFERENCIA_MODELO']}"
+        elif intencion == "referencia_interna":
+            detalle = f"Referencia interna: {fila['IDENTIFICACION_INTERNA']}"
         elif intencion == "marca":
             detalle = f"Marca: {fila['MARCA']}"
         elif intencion == "informe":
-            detalle = f"Informe: {fila.get('INFORME', 'N/E')} | Referencia: {fila['REFERENCIA']}"
+            detalle = (
+                f"Informe: {fila.get('INFORME', 'N/E')} | "
+                f"Referencia / Modelo: {fila['REFERENCIA_MODELO']} | "
+                f"Referencia interna: {fila['IDENTIFICACION_INTERNA']}"
+            )
         elif intencion == "cotizacion":
-            detalle = f"Cotizacion: {fila.get('COTIZACION', 'N/E')} | Referencia: {fila['REFERENCIA']}"
+            detalle = (
+                f"Cotizacion: {fila.get('COTIZACION', 'N/E')} | "
+                f"Referencia / Modelo: {fila['REFERENCIA_MODELO']} | "
+                f"Referencia interna: {fila['IDENTIFICACION_INTERNA']}"
+            )
         else:
             detalle = (
                 f"Cliente: {fila['CLIENTE']} | Marca: {fila['MARCA']} | "
-                f"Referencia: {fila['REFERENCIA']} | Ubicacion: {fila['UBICACION']} | Estado: {fila['ESTADO']}"
+                f"Referencia / Modelo: {fila['REFERENCIA_MODELO']} | "
+                f"Referencia interna: {fila['IDENTIFICACION_INTERNA']} | "
+                f"Ubicacion: {fila['UBICACION']} | Estado: {fila['ESTADO']}"
             )
         bloques.append(f"{i}. {detalle}")
 
@@ -102,7 +115,9 @@ def responder_consulta(consulta: str) -> str:
     if intencion == "descripcion":
         return f"La descripcion es: {fila['DESCRIPCION']}"
     if intencion == "referencia":
-        return f"La referencia es: {fila['REFERENCIA']}"
+        return f"La referencia / modelo es: {fila['REFERENCIA_MODELO']}"
+    if intencion == "referencia_interna":
+        return f"La referencia interna es: {fila['IDENTIFICACION_INTERNA']}"
     if intencion == "marca":
         return f"La marca es: {fila['MARCA']}"
     if intencion == "informe":

@@ -110,4 +110,8 @@ def cargar_datos():
     # Normalizar MARCA: quitar espacios en blanco y usar N/E cuando no haya valor
     df["MARCA"] = df["MARCA"].astype("string").str.strip()
     df["MARCA"] = df["MARCA"].replace({"": pd.NA}).fillna("N/E")
+
+    # Alias para búsquedas más naturales sin alterar la estructura original del Excel.
+    df["REFERENCIA_MODELO"] = df["REFERENCIA"]
+    df["IDENTIFICACION_INTERNA"] = df["ID"]
     return df
