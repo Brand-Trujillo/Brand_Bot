@@ -113,5 +113,7 @@ def cargar_datos():
 
     # Alias para búsquedas más naturales sin alterar la estructura original del Excel.
     df["REFERENCIA_MODELO"] = df["REFERENCIA"]
+    df["REFERENCIA_EXTERNA"] = df["SERIE"]
+    df["REFERENCIA_INTERNA"] = df["ID"]
     df["IDENTIFICACION_INTERNA"] = df["ID"]
     return df

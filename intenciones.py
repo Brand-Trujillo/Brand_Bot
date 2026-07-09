@@ -72,6 +72,9 @@ def detectar_intencion(texto):
     referencia = [
         "referencia", "ref", "codigo", "código", "folio", "modelo"
     ]
+    referencia_externa = [
+        "referencia externa", "externa", "codigo externo", "código externo"
+    ]
     referencia_interna = [
         "referencia interna", "identificacion interna", "identificación interna",
         "id interna", "interna", "codigo interno", "código interno"
@@ -118,6 +121,8 @@ def detectar_intencion(texto):
         return "descripcion"
     if contiene_lista(referencia_interna):
         return "referencia_interna"
+    if contiene_lista(referencia_externa):
+        return "referencia_externa"
     if contiene_lista(referencia):
         return "referencia"
     if contiene_lista(marca):

@@ -128,8 +128,10 @@ def buscar(df, texto):
         campos_objetivo.append('REFERENCIA')
     if 'modelo' in texto_bajo or 'referencia modelo' in texto_bajo or 'referencia/modelo' in texto_bajo:
         campos_objetivo.append('REFERENCIA_MODELO')
+    if 'referencia externa' in texto_bajo or 'externa' in texto_bajo or 'externa' in tokens:
+        campos_objetivo.append('REFERENCIA_EXTERNA')
     if 'interna' in texto_bajo or 'identificacion interna' in texto_bajo or 'identificación interna' in texto_bajo or 'id interna' in texto_bajo:
-        campos_objetivo.append('IDENTIFICACION_INTERNA')
+        campos_objetivo.append('REFERENCIA_INTERNA')
     if 'marca' in texto_bajo or 'etiqueta' in texto_bajo or 'brand' in texto_bajo or 'marca' in tokens:
         campos_objetivo.append('MARCA')
     if 'ubicacion' in texto_bajo or 'direccion' in texto_bajo or 'localizacion' in texto_bajo or 'ubicado' in texto_bajo or 'ubicada' in texto_bajo or 'donde' in texto_bajo or 'ubicacion' in tokens:
@@ -142,8 +144,10 @@ def buscar(df, texto):
         campos_objetivo.append('REFERENCIA')
     if 'modelo' in texto_bajo or 'modelo' in tokens:
         campos_objetivo.append('REFERENCIA_MODELO')
+    if 'externa' in texto_bajo or 'externa' in tokens:
+        campos_objetivo.append('REFERENCIA_EXTERNA')
     if 'interna' in texto_bajo or 'interna' in tokens:
-        campos_objetivo.append('IDENTIFICACION_INTERNA')
+        campos_objetivo.append('REFERENCIA_INTERNA')
     if 'marca' in texto_bajo or 'marca' in tokens:
         campos_objetivo.append('MARCA')
     if 'ubicacion' in texto_bajo or 'ubicacion' in tokens:
@@ -165,7 +169,7 @@ def buscar(df, texto):
                     mask_exact = _pd.Series(False, index=df.index)
                     for f in filtros:
                         # Si el filtro es numérico y el campo es COTIZACION, extraer dígitos para comparar
-                        if campo in ['COTIZACION', 'INFORME', 'IDENTIFICACION_INTERNA'] and f.isdigit():
+                        if campo in ['COTIZACION', 'INFORME', 'IDENTIFICACION_INTERNA', 'REFERENCIA_INTERNA'] and f.isdigit():
                             digits = serie_raw.str.extract(r'(\d+)', expand=False).fillna('')
                             # comparar sin ceros a la izquierda
                             mask_num = digits.str.lstrip('0') == f.lstrip('0')
@@ -180,7 +184,7 @@ def buscar(df, texto):
                 # 2) Búsqueda por substring (vectorizada)
                 if filtros:
                     # Si todos los filtros son numéricos y el campo es COTIZACION, buscar por presencia de números
-                    if campo in ['COTIZACION', 'IDENTIFICACION_INTERNA'] and all(f.isdigit() for f in filtros):
+                    if campo in ['COTIZACION', 'IDENTIFICACION_INTERNA', 'REFERENCIA_INTERNA'] and all(f.isdigit() for f in filtros):
                         mask_sub = _pd.Series(False, index=df.index)
                         for f in filtros:
                             mask_sub = mask_sub | serie.str.contains(re.escape(f), na=False)
