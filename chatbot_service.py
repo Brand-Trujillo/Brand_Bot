@@ -14,13 +14,27 @@ def _fecha_texto(valor):
     return str(valor)
 
 
+def _valor_modelo(fila) -> str:
+    valor = str(fila.get("REFERENCIA_MODELO", "")).strip()
+    interno = str(fila.get("IDENTIFICACION_INTERNA", "")).strip()
+
+    if not valor or valor.lower() in {"nan", "none", "n/a", "n\u002fe", "n/e"}:
+        return "N/E"
+
+    # Si el valor es solo numérico o coincide con la identificación interna,
+    # asumimos que no es un modelo real y devolvemos N/A.
+    if valor == interno or valor.isdigit():
+        return "N/A"
+
+    return valor
+
+
 def _resumen_fila(fila) -> str:
     return (
         f"Cliente: {fila['CLIENTE']}\n"
         f"Marca: {fila['MARCA']}\n"
         f"Descripcion: {fila['DESCRIPCION']}\n"
-        f"Marca: {fila['MARCA']}\n"
-        f"Referencia / Modelo: {fila['REFERENCIA_MODELO']}\n"
+        f"Referencia / Modelo: {_valor_modelo(fila)}\n"
         f"Referencia externa: {fila['REFERENCIA']}\n"
         f"Referencia interna: {fila['IDENTIFICACION_INTERNA']}\n"
         f"Informe: {fila.get('INFORME', 'N/E')}\n"
