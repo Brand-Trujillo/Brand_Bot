@@ -7,19 +7,22 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <div class="bg-shape bg-shape-a"></div>
   <div class="bg-shape bg-shape-b"></div>
 
   <main class="layout">
-    <header class="brand">
-      <h1>Brand Bot</h1>
-      <p>Consulta muestras del laboratorio en tiempo real.</p>
-    </header>
-
     <section class="chat-shell" aria-label="Chat del asistente">
+      <header class="brand">
+        <div class="brand-dot" aria-hidden="true"></div>
+        <div>
+          <h1>Brand Bot</h1>
+          <p>Control de muestras en tiempo real</p>
+        </div>
+      </header>
+
       <div id="chat" class="chat-feed" aria-live="polite">
         <article class="bubble bot">
           <h2>Asistente</h2>
@@ -29,12 +32,12 @@
 
       <form id="chat-form" class="chat-form" autocomplete="off">
         <label for="message" class="sr-only">Escribe tu pregunta</label>
-        <input id="message" name="message" type="text" placeholder="Ejemplo: estado de la muestra 123" required>
+        <input id="message" name="message" type="text" placeholder="Ejemplo: estado de la muestra 21692" required>
         <button id="send-btn" type="submit">Enviar</button>
       </form>
     </section>
   </main>
 
-  <script src="/static/chat.js"></script>
+  <script src="{{ url_for('static', filename='chat.js') }}"></script>
 </body>
 </html>
