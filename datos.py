@@ -1,9 +1,13 @@
 import pandas as pd
 import os
 import sys
+import io
+import urllib.parse
+import urllib.request
 
 # Nombre del archivo de datos (se asume en la misma carpeta que el ejecutable/archivo)
 ARCHIVO = "Control de muestras_2026.xlsx"
+SHEET_NAME = "CONTROL_MUESTRAS_2026"
 
 
 def _resource_path(rel_path: str) -> str:
@@ -19,13 +23,60 @@ def _resource_path(rel_path: str) -> str:
     return os.path.join(base_path, rel_path)
 
 
-def cargar_datos():
-    archivo_path = _resource_path(ARCHIVO)
-    df = pd.read_excel(
-        archivo_path,
-        sheet_name="CONTROL_MUESTRAS_2026",
-        header=6
+def _onedrive_download_url(url: str) -> str:
+    """Convierte una URL de OneDrive/SharePoint a descarga directa cuando es posible."""
+    parsed = urllib.parse.urlparse(url)
+    query = urllib.parse.parse_qs(parsed.query)
+
+    # Share links de OneDrive/SharePoint suelen aceptar download=1
+    if "download" not in query:
+        query["download"] = ["1"]
+
+    new_query = urllib.parse.urlencode(query, doseq=True)
+    return urllib.parse.urlunparse(
+        (parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment)
     )
+
+
+def _cargar_desde_onedrive(url: str) -> pd.DataFrame:
+    """Descarga el Excel desde OneDrive y lo carga en memoria.
+
+    Esto evita problemas de bloqueo cuando el archivo esta abierto localmente.
+    """
+    request = urllib.request.Request(url, method="GET")
+    with urllib.request.urlopen(request, timeout=45) as response:
+        data = response.read()
+
+    buffer = io.BytesIO(data)
+    df = pd.read_excel(
+        buffer,
+        sheet_name=SHEET_NAME,
+        header=6,
+    )
+    return df
+
+
+def cargar_datos():
+    onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", "").strip()
+
+    if onedrive_url:
+        try:
+            df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url))
+        except Exception:
+            # Fallback seguro: continuar con archivo local si la URL falla.
+            archivo_path = _resource_path(ARCHIVO)
+            df = pd.read_excel(
+                archivo_path,
+                sheet_name=SHEET_NAME,
+                header=6,
+            )
+    else:
+        archivo_path = _resource_path(ARCHIVO)
+        df = pd.read_excel(
+            archivo_path,
+            sheet_name=SHEET_NAME,
+            header=6,
+        )
     # Eliminar las dos filas que sobran
     df = df.iloc[2:]
     # Reiniciar el índice
