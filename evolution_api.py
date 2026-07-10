@@ -63,8 +63,8 @@ def obtener_respuesta_evolution(prompt, system_prompt=None, max_tokens=512):
 
             return response_json.get("text", "Respuesta no disponible desde Evolution API.")
     except urllib.error.HTTPError as exc:
-        return f"Error de Evolution API: {exc.code} {exc.reason}"
+        return f"Evolution API HTTP {exc.code}: {exc.reason}."
     except urllib.error.URLError as exc:
-        return f"No se pudo conectar a Evolution API: {exc.reason}"
+        return f"Evolution API unreachable: {exc.reason}."
     except Exception as exc:
-        return f"Error inesperado al usar Evolution API: {exc}"
+        return f"Evolution API failure: {exc}."
