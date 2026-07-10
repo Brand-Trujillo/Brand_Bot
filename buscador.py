@@ -176,6 +176,41 @@ def buscar(df, texto):
                     'rapidfuzz': False,
                 }
 
+            # Si no existe código exacto, intentamos match por prefijo en columnas de código.
+            # Ej: consulta "PC-26-120" debe encontrar "PC-26-120-004".
+            mask_prefix = _pd.Series(False, index=df.index)
+            prefix_fields = []
+            for c in cols_codigo:
+                norm_col = df[c].astype(str).map(_norm_code)
+                mask_c = norm_col.str.startswith(target_code, na=False)
+                if mask_c.any():
+                    prefix_fields.append(c)
+                    mask_prefix = mask_prefix | mask_c
+
+            if mask_prefix.any():
+                resultados = df[mask_prefix]
+                dedup_cols = [
+                    c for c in [
+                        "CLIENTE",
+                        "REFERENCIA_EXTERNA",
+                        "REFERENCIA_MODELO",
+                        "REFERENCIA_INTERNA",
+                        "INFORME",
+                        "COTIZACION",
+                        "NUMERO",
+                    ]
+                    if c in resultados.columns
+                ]
+                if dedup_cols:
+                    resultados = resultados.drop_duplicates(subset=dedup_cols)
+                resultados = _ordenar_por_relevancia(resultados, [target_code], prefix_fields)
+                return resultados, {
+                    'tokens': tokens,
+                    'match_field': ','.join(prefix_fields) if prefix_fields else 'codigo',
+                    'match': 'prefix_code',
+                    'rapidfuzz': False,
+                }
+
     # Detectar patrón tipo 'C 502' o 'c502' y priorizar búsqueda en COTIZACION
     m_c_pref = re.search(r'(?i)\b[cC]\s*0*(\d+)\b', texto_original)
     if m_c_pref and 'COTIZACION' in df.columns:
