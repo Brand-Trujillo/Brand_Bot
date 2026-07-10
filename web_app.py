@@ -6,7 +6,8 @@ from datos import obtener_fuente_datos, obtener_info_datos_locales
 import evolution_api
 
 app = Flask(__name__)
-APP_VERSION = "20260710a"
+APP_VERSION = "20260710b"
+DEPLOY_COMMIT = os.getenv("RENDER_GIT_COMMIT", "local")
 
 
 @app.get("/")
@@ -16,7 +17,14 @@ def index():
 
 @app.get("/health")
 def health():
-    return jsonify({"status": "ok", "version": APP_VERSION, "data_source": obtener_fuente_datos()})
+    return jsonify(
+        {
+            "status": "ok",
+            "version": APP_VERSION,
+            "data_source": obtener_fuente_datos(),
+            "deploy_commit": DEPLOY_COMMIT,
+        }
+    )
 
 
 @app.get("/api/version")
@@ -28,6 +36,7 @@ def api_version():
             "version": APP_VERSION,
             "data_source": obtener_fuente_datos(),
             "data_local": info_local,
+            "deploy_commit": DEPLOY_COMMIT,
             "cwd": os.getcwd(),
             "entry": "web_app:app",
             "evolution_api_file": getattr(evolution_api, "__file__", "unknown"),
