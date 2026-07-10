@@ -18,6 +18,14 @@ DEFAULT_ONEDRIVE_XLSX_URL = (
 LAST_DATA_SOURCE = "unknown"
 
 
+def obtener_ruta_archivo_equipos() -> str:
+    """Devuelve la ruta del Excel opcional de control de equipos.
+
+    Se usa solo si se define EQUIPOS_XLSX_PATH.
+    """
+    return os.getenv("EQUIPOS_XLSX_PATH", "").strip()
+
+
 def obtener_ruta_archivo_local() -> str:
     """Devuelve la ruta del Excel local usado por la app.
 
@@ -76,37 +84,28 @@ def _cargar_desde_onedrive(url: str) -> pd.DataFrame:
     return df
 
 
-def cargar_datos():
-    global LAST_DATA_SOURCE
-    # Por defecto usamos el archivo local para que coincida con el Excel del equipo.
-    # Para usar OneDrive, definir ONEDRIVE_XLSX_URL explicitamente.
-    onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", "").strip()
-
-    if onedrive_url:
+def _leer_excel_local(path: str, sheet_name: str = "", header: int = 6) -> pd.DataFrame:
+    """Lee un Excel local con fallback de hoja cuando no coincide el nombre."""
+    if sheet_name:
         try:
-            df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url))
-            LAST_DATA_SOURCE = "onedrive"
+            return pd.read_excel(path, sheet_name=sheet_name, header=header)
         except Exception:
-            # Fallback seguro: continuar con archivo local si la URL falla.
-            archivo_path = obtener_ruta_archivo_local()
-            df = pd.read_excel(
-                archivo_path,
-                sheet_name=SHEET_NAME,
-                header=6,
-            )
-            LAST_DATA_SOURCE = "local_fallback"
-    else:
-        archivo_path = obtener_ruta_archivo_local()
-        df = pd.read_excel(
-            archivo_path,
-            sheet_name=SHEET_NAME,
-            header=6,
-        )
-        LAST_DATA_SOURCE = "local"
+            pass
+
+    # Fallback robusto: primera hoja disponible.
+    xls = pd.ExcelFile(path)
+    if not xls.sheet_names:
+        raise ValueError(f"El archivo no contiene hojas: {path}")
+    return pd.read_excel(path, sheet_name=xls.sheet_names[0], header=header)
+
+
+def _normalizar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza estructura y aliases esperados por el buscador/chat."""
     # Eliminar las dos filas que sobran
     df = df.iloc[2:]
     # Reiniciar el índice
     df = df.reset_index(drop=True)
+
     # Renombrar columnas según la estructura real del libro.
     # En el formato actual hay 16 columnas útiles.
     # Mapeo validado contra filas recientes del archivo.
@@ -155,9 +154,13 @@ def cargar_datos():
         else:
             extra = [f"EXTRA_{i}" for i in range(n - len(columnas_base))]
             df.columns = columnas_base + extra
+
     # limpiar los nombres de las columnas
     df.columns = df.columns.str.strip()
+
     # Normalizar MARCA: quitar espacios en blanco y usar N/E cuando no haya valor
+    if "MARCA" not in df.columns:
+        df["MARCA"] = "N/E"
     df["MARCA"] = df["MARCA"].astype("string").str.strip()
     df["MARCA"] = df["MARCA"].replace({"": pd.NA}).fillna("N/E")
 
@@ -185,6 +188,44 @@ def cargar_datos():
             sufijo = serie_ref[mask].str[4:]
             df.loc[mask, "REFERENCIA_INTERNA"] = years[mask] + sufijo
             df.loc[mask, "IDENTIFICACION_INTERNA"] = df.loc[mask, "REFERENCIA_INTERNA"]
+
+    return df
+
+
+def cargar_datos():
+    global LAST_DATA_SOURCE
+    # Por defecto usamos el archivo local para que coincida con el Excel del equipo.
+    # Para usar OneDrive, definir ONEDRIVE_XLSX_URL explicitamente.
+    onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", "").strip()
+
+    if onedrive_url:
+        try:
+            df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url))
+            LAST_DATA_SOURCE = "onedrive"
+        except Exception:
+            # Fallback seguro: continuar con archivo local si la URL falla.
+            archivo_path = obtener_ruta_archivo_local()
+            df = _leer_excel_local(archivo_path, sheet_name=SHEET_NAME, header=6)
+            LAST_DATA_SOURCE = "local_fallback"
+    else:
+        archivo_path = obtener_ruta_archivo_local()
+        df = _leer_excel_local(archivo_path, sheet_name=SHEET_NAME, header=6)
+        LAST_DATA_SOURCE = "local"
+
+    df = _normalizar_dataframe(df)
+
+    # Carga opcional de un segundo Excel (control de equipos) y lo une al dataset principal.
+    equipos_path = obtener_ruta_archivo_equipos()
+    if equipos_path:
+        try:
+            equipos_sheet = os.getenv("EQUIPOS_SHEET_NAME", SHEET_NAME).strip()
+            df_equipos_raw = _leer_excel_local(equipos_path, sheet_name=equipos_sheet, header=6)
+            df_equipos = _normalizar_dataframe(df_equipos_raw)
+            df = pd.concat([df, df_equipos], ignore_index=True, sort=False)
+            LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos"
+        except Exception:
+            LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_error"
+
     return df
 
 
@@ -197,8 +238,14 @@ def obtener_info_datos_locales() -> dict:
     ruta = obtener_ruta_archivo_local()
     existe = os.path.exists(ruta)
     mtime = os.path.getmtime(ruta) if existe else None
+    ruta_equipos = obtener_ruta_archivo_equipos()
+    equipos_existe = os.path.exists(ruta_equipos) if ruta_equipos else False
+    equipos_mtime = os.path.getmtime(ruta_equipos) if equipos_existe else None
     return {
         "ruta": ruta,
         "existe": existe,
         "mtime": mtime,
+        "ruta_equipos": ruta_equipos,
+        "equipos_existe": equipos_existe,
+        "equipos_mtime": equipos_mtime,
     }
