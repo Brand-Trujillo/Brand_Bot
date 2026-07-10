@@ -67,7 +67,29 @@ def _marca_texto(fila) -> str:
     return marca
 
 
+def _es_registro_equipo(fila) -> bool:
+    return _valor_texto(fila.get("TIPO_REGISTRO")).lower() == "equipo"
+
+
+def _resumen_fila_equipo(fila) -> str:
+    return (
+        f"Equipo: {_valor_texto(fila.get('EQUIPO'))}\n"
+        f"Identificacion interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))}\n"
+        f"Serie: {_valor_texto(fila.get('SERIE'))}\n"
+        f"Marca: {_valor_texto(fila.get('MARCA'))}\n"
+        f"Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))}\n"
+        f"Ultima calibracion: {_fecha_texto(fila.get('ULTIMA_CALIBRACION'))}\n"
+        f"Calibrado por: {_valor_texto(fila.get('CALIBRADO_POR'))}\n"
+        f"Proxima calibracion: {_fecha_texto(fila.get('PROXIMA_CALIBRACION'))}\n"
+        f"Tiempo de alarma: {_fecha_texto(fila.get('TIEMPO_ALARMA'))}\n"
+        f"Estado de calibracion: {_valor_texto(fila.get('ESTADO_CALIBRACION'))}"
+    )
+
+
 def _resumen_fila(fila) -> str:
+    if _es_registro_equipo(fila):
+        return _resumen_fila_equipo(fila)
+
     return (
         f"Cliente: {_valor_texto(fila.get('CLIENTE'))}\n"
         f"Marca: {_marca_texto(fila)}\n"
@@ -82,6 +104,9 @@ def _resumen_fila(fila) -> str:
 
 
 def _campo_por_intencion(fila, intencion: str) -> str:
+    if _es_registro_equipo(fila):
+        return f"Estado de calibracion: {_valor_texto(fila.get('ESTADO_CALIBRACION'))}"
+
     fecha = _fecha_texto(fila.get("FECHA_INGRESO", "N/E"))
 
     if intencion == "ubicacion":
@@ -115,6 +140,15 @@ def _campo_por_intencion(fila, intencion: str) -> str:
 
 
 def _resumen_corto(fila, intencion: str) -> str:
+    if _es_registro_equipo(fila):
+        return (
+            f"Equipo: {_valor_texto(fila.get('EQUIPO'))} | "
+            f"Id interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))} | "
+            f"Serie: {_valor_texto(fila.get('SERIE'))}\n"
+            f"Marca: {_valor_texto(fila.get('MARCA'))} | Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))} | "
+            f"Estado calibracion: {_valor_texto(fila.get('ESTADO_CALIBRACION'))}"
+        )
+
     return (
         f"Cliente: {_valor_texto(fila.get('CLIENTE'))} | "
         f"Ref. interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))} | "
@@ -173,6 +207,12 @@ def responder_consulta(consulta: str) -> str:
 
     fila = resultado.iloc[0]
 
+    if _es_registro_equipo(fila):
+        return (
+            "Encontre 1 equipo que coincide.\n"
+            f"{_resumen_fila_equipo(fila)}"
+        )
+
     return (
         "Encontre 1 muestra que coincide.\n"
         f"{_resumen_corto(fila, intencion)}"
@@ -217,4 +257,7 @@ def responder_consulta_burbujas(consulta: str):
         return bloques
 
     fila = resultado.iloc[0]
+    if _es_registro_equipo(fila):
+        return ["Encontre 1 equipo que coincide.", _resumen_fila_equipo(fila)]
+
     return ["Encontre 1 muestra que coincide.", _resumen_fila(fila), _campo_por_intencion(fila, intencion)]

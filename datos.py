@@ -4,6 +4,7 @@ import sys
 import io
 import urllib.parse
 import urllib.request
+import unicodedata
 
 # Nombre del archivo de datos (se asume en la misma carpeta que el ejecutable/archivo)
 ARCHIVO = "Control de muestras_2026.xlsx"
@@ -108,6 +109,92 @@ def _leer_excel_local(path: str, sheet_name: str = "", header: int = 6) -> pd.Da
     return pd.read_excel(path, sheet_name=xls.sheet_names[0], header=header)
 
 
+def _texto_normalizado(valor) -> str:
+    texto = str(valor or "").strip().upper()
+    texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
+    texto = " ".join(texto.split())
+    return texto
+
+
+def _detectar_header_equipos(path: str, sheet_name: str = "") -> tuple[str, int]:
+    xls = pd.ExcelFile(path)
+    hoja = sheet_name if sheet_name and sheet_name in xls.sheet_names else xls.sheet_names[0]
+    preview = pd.read_excel(path, sheet_name=hoja, header=None, nrows=20)
+    keywords = {"EQUIPO", "IDENTIFICACION INTERNA", "SERIE", "MARCA", "MODELO"}
+
+    best_idx = 0
+    best_score = -1
+    for idx in range(len(preview.index)):
+        row = [_texto_normalizado(v) for v in preview.iloc[idx].tolist()]
+        score = sum(1 for key in keywords if key in row)
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+    return hoja, best_idx
+
+
+def _normalizar_dataframe_equipos(path: str, sheet_name: str = "") -> pd.DataFrame:
+    hoja, header_idx = _detectar_header_equipos(path, sheet_name)
+    df = pd.read_excel(path, sheet_name=hoja, header=header_idx)
+    df = df.dropna(how="all").reset_index(drop=True)
+
+    rename_map = {}
+    for col in df.columns:
+        norm = _texto_normalizado(col)
+        if norm == "EQUIPO":
+            rename_map[col] = "EQUIPO"
+        elif norm == "IDENTIFICACION INTERNA":
+            rename_map[col] = "REFERENCIA_INTERNA"
+        elif norm == "SERIE":
+            rename_map[col] = "SERIE"
+        elif norm == "MARCA":
+            rename_map[col] = "MARCA"
+        elif norm == "MODELO":
+            rename_map[col] = "REFERENCIA_MODELO"
+        elif norm in {"ULTIMA CALIBRACION", "ULTIMA CALIBRACION "}:
+            rename_map[col] = "ULTIMA_CALIBRACION"
+        elif norm == "CALIBRADO POR":
+            rename_map[col] = "CALIBRADO_POR"
+        elif norm == "PROXIMA CALIBRACION":
+            rename_map[col] = "PROXIMA_CALIBRACION"
+        elif norm == "TIEMPO DE ALARMA":
+            rename_map[col] = "TIEMPO_ALARMA"
+        elif norm == "ESTADO DE CALIBRACION":
+            rename_map[col] = "ESTADO_CALIBRACION"
+
+    df = df.rename(columns=rename_map)
+
+    for col in [
+        "EQUIPO",
+        "REFERENCIA_INTERNA",
+        "SERIE",
+        "MARCA",
+        "REFERENCIA_MODELO",
+        "ULTIMA_CALIBRACION",
+        "CALIBRADO_POR",
+        "PROXIMA_CALIBRACION",
+        "TIEMPO_ALARMA",
+        "ESTADO_CALIBRACION",
+    ]:
+        if col not in df.columns:
+            df[col] = "N/E"
+
+    # Alias para reutilizar buscador actual.
+    df["CLIENTE"] = df["EQUIPO"]
+    df["DESCRIPCION"] = df["EQUIPO"]
+    df["REFERENCIA_EXTERNA"] = df["SERIE"]
+    df["IDENTIFICACION_INTERNA"] = df["REFERENCIA_INTERNA"]
+    df["ESTADO"] = df["ESTADO_CALIBRACION"]
+    df["INFORME"] = df.get("INFORME", "N/E")
+    df["COTIZACION"] = df.get("COTIZACION", "N/E")
+    df["UBICACION"] = df.get("UBICACION", "N/E")
+    df["NUMERO"] = df.get("NUMERO", "N/E")
+    df["FECHA_INGRESO"] = df.get("FECHA_INGRESO", pd.NA)
+    df["TIPO_REGISTRO"] = "equipo"
+
+    return df
+
+
 def _normalizar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """Normaliza estructura y aliases esperados por el buscador/chat."""
     # Eliminar las dos filas que sobran
@@ -198,6 +285,8 @@ def _normalizar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
             df.loc[mask, "REFERENCIA_INTERNA"] = years[mask] + sufijo
             df.loc[mask, "IDENTIFICACION_INTERNA"] = df.loc[mask, "REFERENCIA_INTERNA"]
 
+            df["TIPO_REGISTRO"] = "muestra"
+
     return df
 
 
@@ -228,8 +317,7 @@ def cargar_datos():
     if equipos_path:
         try:
             equipos_sheet = os.getenv("EQUIPOS_SHEET_NAME", SHEET_NAME).strip()
-            df_equipos_raw = _leer_excel_local(equipos_path, sheet_name=equipos_sheet, header=6)
-            df_equipos = _normalizar_dataframe(df_equipos_raw)
+            df_equipos = _normalizar_dataframe_equipos(equipos_path, sheet_name=equipos_sheet)
             df = pd.concat([df, df_equipos], ignore_index=True, sort=False)
             LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos"
         except Exception:
