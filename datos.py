@@ -23,7 +23,16 @@ def obtener_ruta_archivo_equipos() -> str:
 
     Se usa solo si se define EQUIPOS_XLSX_PATH.
     """
-    return os.getenv("EQUIPOS_XLSX_PATH", "").strip()
+    custom_path = os.getenv("EQUIPOS_XLSX_PATH", "").strip()
+    if custom_path:
+        return custom_path
+
+    # Auto-detección local para facilitar uso sin variables de entorno.
+    # Si existe Equipos.xlsx en la raíz del proyecto, se usa como segunda fuente.
+    default_local = _resource_path("Equipos.xlsx")
+    if os.path.exists(default_local):
+        return default_local
+    return ""
 
 
 def obtener_ruta_archivo_local() -> str:
