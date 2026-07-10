@@ -14,6 +14,21 @@ DEFAULT_ONEDRIVE_XLSX_URL = (
     "muestras_2026.xlsx?d=w34336858a30b4b0a98962963a3631f0f&csf=1&web=1&e=r7iItR"
 )
 
+# Fuente cargada en memoria para diagnostico
+LAST_DATA_SOURCE = "unknown"
+
+
+def obtener_ruta_archivo_local() -> str:
+    """Devuelve la ruta del Excel local usado por la app.
+
+    Si existe la variable DATOS_XLSX_PATH se usa esa ruta explícita.
+    Esto permite apuntar al archivo actualizado real (por ejemplo OneDrive sincronizado).
+    """
+    custom_path = os.getenv("DATOS_XLSX_PATH", "").strip()
+    if custom_path:
+        return custom_path
+    return _resource_path(ARCHIVO)
+
 
 def _resource_path(rel_path: str) -> str:
     """Devuelve la ruta absoluta del recurso, compatible con PyInstaller onefile.
@@ -62,58 +77,128 @@ def _cargar_desde_onedrive(url: str) -> pd.DataFrame:
 
 
 def cargar_datos():
-    onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", DEFAULT_ONEDRIVE_XLSX_URL).strip()
+    global LAST_DATA_SOURCE
+    # Por defecto usamos el archivo local para que coincida con el Excel del equipo.
+    # Para usar OneDrive, definir ONEDRIVE_XLSX_URL explicitamente.
+    onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", "").strip()
 
     if onedrive_url:
         try:
             df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url))
+            LAST_DATA_SOURCE = "onedrive"
         except Exception:
             # Fallback seguro: continuar con archivo local si la URL falla.
-            archivo_path = _resource_path(ARCHIVO)
+            archivo_path = obtener_ruta_archivo_local()
             df = pd.read_excel(
                 archivo_path,
                 sheet_name=SHEET_NAME,
                 header=6,
             )
+            LAST_DATA_SOURCE = "local_fallback"
     else:
-        archivo_path = _resource_path(ARCHIVO)
+        archivo_path = obtener_ruta_archivo_local()
         df = pd.read_excel(
             archivo_path,
             sheet_name=SHEET_NAME,
             header=6,
         )
+        LAST_DATA_SOURCE = "local"
     # Eliminar las dos filas que sobran
     df = df.iloc[2:]
     # Reiniciar el índice
     df = df.reset_index(drop=True)
-    # Renombrar columnas
-    df.columns = [
-        "ITEM",
-        "FECHA_INGRESO",
-        "CLIENTE",
-        "DESCRIPCION",
-        "MARCA",
-        "REFERENCIA",
-        "SERIE",
-        "ID",
-        "AÑO",
-        "INFORME",
-        "NUMERO",
-        "COTIZACION",
-        "UBICACION",
-        "ESTADO",
-        "FECHA_ENTREGA",
-        "OBSERVACIONES"
-    ]
+    # Renombrar columnas según la estructura real del libro.
+    # En el formato actual hay 16 columnas útiles.
+    # Mapeo validado contra filas recientes del archivo.
+    if len(df.columns) == 16:
+        df.columns = [
+            "ITEM",
+            "FECHA_INGRESO",
+            "CLIENTE",
+            "DESCRIPCION",
+            "MARCA",
+            "REFERENCIA_MODELO",
+            "REFERENCIA_EXTERNA",
+            "REFERENCIA_INTERNA",
+            "ID",
+            "AÑO",
+            "INFORME",
+            "NUMERO",
+            "COTIZACION",
+            "UBICACION",
+            "ESTADO",
+            "OBSERVACIONES",
+        ]
+    else:
+        # Compatibilidad con estructuras antiguas o empaquetadas.
+        columnas_base = [
+            "ITEM",
+            "FECHA_INGRESO",
+            "CLIENTE",
+            "DESCRIPCION",
+            "MARCA",
+            "REFERENCIA",
+            "SERIE",
+            "ID",
+            "AÑO",
+            "INFORME",
+            "NUMERO",
+            "COTIZACION",
+            "UBICACION",
+            "ESTADO",
+            "FECHA_ENTREGA",
+            "OBSERVACIONES",
+        ]
+        n = len(df.columns)
+        if n <= len(columnas_base):
+            df.columns = columnas_base[:n]
+        else:
+            extra = [f"EXTRA_{i}" for i in range(n - len(columnas_base))]
+            df.columns = columnas_base + extra
     # limpiar los nombres de las columnas
     df.columns = df.columns.str.strip()
     # Normalizar MARCA: quitar espacios en blanco y usar N/E cuando no haya valor
     df["MARCA"] = df["MARCA"].astype("string").str.strip()
     df["MARCA"] = df["MARCA"].replace({"": pd.NA}).fillna("N/E")
 
-    # Alias para búsquedas más naturales sin alterar la estructura original del Excel.
-    df["REFERENCIA_MODELO"] = df["REFERENCIA"]
-    df["REFERENCIA_EXTERNA"] = df["SERIE"]
-    df["REFERENCIA_INTERNA"] = df["ID"]
-    df["IDENTIFICACION_INTERNA"] = df["ID"]
+    # Alias de compatibilidad para el resto del sistema.
+    if "REFERENCIA" not in df.columns and "REFERENCIA_EXTERNA" in df.columns:
+        df["REFERENCIA"] = df["REFERENCIA_EXTERNA"]
+    if "SERIE" not in df.columns and "REFERENCIA_INTERNA" in df.columns:
+        df["SERIE"] = df["REFERENCIA_INTERNA"]
+    if "REFERENCIA_MODELO" not in df.columns:
+        df["REFERENCIA_MODELO"] = "N/E"
+    if "REFERENCIA_EXTERNA" not in df.columns and "REFERENCIA" in df.columns:
+        df["REFERENCIA_EXTERNA"] = df["REFERENCIA"]
+    if "REFERENCIA_INTERNA" not in df.columns and "SERIE" in df.columns:
+        df["REFERENCIA_INTERNA"] = df["SERIE"]
+    if "IDENTIFICACION_INTERNA" not in df.columns and "REFERENCIA_INTERNA" in df.columns:
+        df["IDENTIFICACION_INTERNA"] = df["REFERENCIA_INTERNA"]
+
+    # Normaliza referencias internas tipo 'yyyy-mm-dd-xx' al anio real de FECHA_INGRESO.
+    if "REFERENCIA_INTERNA" in df.columns and "FECHA_INGRESO" in df.columns:
+        fechas = pd.to_datetime(df["FECHA_INGRESO"], errors="coerce")
+        serie_ref = df["REFERENCIA_INTERNA"].astype(str)
+        mask = serie_ref.str.lower().str.startswith("yyyy-") & fechas.notna()
+        if mask.any():
+            years = fechas.dt.year.astype("Int64").astype(str)
+            sufijo = serie_ref[mask].str[4:]
+            df.loc[mask, "REFERENCIA_INTERNA"] = years[mask] + sufijo
+            df.loc[mask, "IDENTIFICACION_INTERNA"] = df.loc[mask, "REFERENCIA_INTERNA"]
     return df
+
+
+def obtener_fuente_datos() -> str:
+    return LAST_DATA_SOURCE
+
+
+def obtener_info_datos_locales() -> dict:
+    """Información diagnóstica básica del archivo local de datos."""
+    ruta = obtener_ruta_archivo_local()
+    existe = os.path.exists(ruta)
+    mtime = os.path.getmtime(ruta) if existe else None
+    return {
+        "ruta": ruta,
+        "existe": existe,
+        "mtime": mtime,
+    }

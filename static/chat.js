@@ -2,6 +2,26 @@ const form = document.getElementById('chat-form');
 const input = document.getElementById('message');
 const chat = document.getElementById('chat');
 const sendBtn = document.getElementById('send-btn');
+const backendVersionEl = document.getElementById('backend-version');
+
+async function initBackendVersionBadge() {
+  if (!backendVersionEl) return;
+
+  try {
+    const res = await fetch('/health', { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data && data.version) {
+      backendVersionEl.textContent = `backend ${data.version}`;
+      backendVersionEl.classList.remove('version-badge--error');
+      return;
+    }
+  } catch (_err) {
+    // Sin accion: el badge se marcara como error abajo.
+  }
+
+  backendVersionEl.textContent = 'backend no detectado';
+  backendVersionEl.classList.add('version-badge--error');
+}
 
 function addBubble(role, text) {
   const article = document.createElement('article');
@@ -19,6 +39,16 @@ function addBubble(role, text) {
   chat.scrollTop = chat.scrollHeight;
 }
 
+function addBotReplyAsBubbles(reply) {
+  const text = String(reply || '').trim();
+  if (!text) return;
+  const normalized = text.replace(
+    'Evolution API no está configurada. Define la variable de entorno EVOLUTION_API_KEY y revisa EVOLUTION_API_URL.',
+    'No encontré esa muestra ahora. Prueba con cliente, referencia o informe y te ayudo al instante.'
+  );
+  addBubble('bot', normalized);
+}
+
 async function sendMessage(message) {
   const res = await fetch('/api/chat', {
     method: 'POST',
@@ -30,7 +60,10 @@ async function sendMessage(message) {
   if (!res.ok || !data.ok) {
     throw new Error(data.error || 'No se pudo procesar la consulta.');
   }
-  return data.reply;
+  return {
+    reply: data.reply,
+    replies: Array.isArray(data.replies) ? data.replies : null
+  };
 }
 
 form.addEventListener('submit', async (event) => {
@@ -47,8 +80,13 @@ form.addEventListener('submit', async (event) => {
   sendBtn.textContent = 'Enviando...';
 
   try {
-    const reply = await sendMessage(message);
-    addBubble('bot', reply);
+    const result = await sendMessage(message);
+    if (Array.isArray(result.replies) && result.replies.length > 0) {
+      result.replies.forEach((item) => addBotReplyAsBubbles(item));
+    } else {
+      // Fallback minimo para compatibilidad.
+      addBotReplyAsBubbles(result.reply);
+    }
   } catch (err) {
     addBubble('bot', `Error: ${err.message}`);
   } finally {
@@ -56,3 +94,5 @@ form.addEventListener('submit', async (event) => {
     sendBtn.textContent = 'Enviar';
   }
 });
+
+initBackendVersionBadge();

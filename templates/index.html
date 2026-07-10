@@ -18,15 +18,18 @@
       <header class="brand">
         <div class="brand-dot" aria-hidden="true"></div>
         <div>
-          <h1>Brand Bot</h1>
-          <p>Control de muestras en tiempo real</p>
+          <h1>Brand_Bot</h1>
+          <p>
+            Asistente virtual de control de Brandon.
+            <span id="backend-version" class="version-badge">backend {{ app_version }}</span>
+          </p>
         </div>
       </header>
 
       <div id="chat" class="chat-feed" aria-live="polite">
         <article class="bubble bot">
           <h2>Asistente</h2>
-          <p>Hola. Puedes preguntarme por cliente, referencia, estado, ubicacion, marca, informe o cotizacion.</p>
+          <p>Hola. Tengo conocimiento sobre las muestras. Puedes preguntarme por cliente, referencia, estado, ubicacion, marca, informe o cotizacion.</p>
         </article>
       </div>
 
@@ -38,6 +41,6 @@
     </section>
   </main>
 
-  <script src="{{ url_for('static', filename='chat.js') }}"></script>
+  <script src="{{ url_for('static', filename='chat.js') }}?v=20260710g"></script>
 </body>
 </html>
