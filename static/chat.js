@@ -7,11 +7,18 @@ const backendVersionEl = document.getElementById('backend-version');
 async function initBackendVersionBadge() {
   if (!backendVersionEl) return;
 
+  const renderBadge = (version, commit) => {
+    const shortCommit = String(commit || '').trim().slice(0, 7);
+    backendVersionEl.textContent = shortCommit
+      ? `backend ${version} · ${shortCommit}`
+      : `backend ${version}`;
+  };
+
   try {
     const res = await fetch('/health', { cache: 'no-store' });
     const data = await res.json().catch(() => ({}));
     if (res.ok && data && data.version) {
-      backendVersionEl.textContent = `backend ${data.version}`;
+      renderBadge(data.version, data.deploy_commit);
       backendVersionEl.classList.remove('version-badge--error');
       return;
     }
