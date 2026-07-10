@@ -120,6 +120,62 @@ def buscar(df, texto):
                 'rapidfuzz': False,
             }
 
+    # Priorizar códigos alfanuméricos con separadores (ej. PC-26-150-004).
+    # Sin esta regla, la tokenización por números genera coincidencias parciales masivas.
+    consulta_raw = str(texto).strip()
+    tiene_letras = bool(re.search(r"[A-Za-z]", consulta_raw))
+    tiene_numeros = bool(re.search(r"\d", consulta_raw))
+    tiene_separador = bool(re.search(r"[-_/]", consulta_raw))
+    if tiene_letras and tiene_numeros and tiene_separador:
+        cols_codigo = [
+            "REFERENCIA_EXTERNA",
+            "REFERENCIA_MODELO",
+            "REFERENCIA",
+            "SERIE",
+            "REFERENCIA_INTERNA",
+            "IDENTIFICACION_INTERNA",
+        ]
+        cols_codigo = [c for c in cols_codigo if c in df.columns]
+
+        def _norm_code(v: str) -> str:
+            return re.sub(r"[^A-Za-z0-9]", "", str(v).upper())
+
+        target_code = _norm_code(consulta_raw)
+        if target_code and cols_codigo:
+            import pandas as _pd
+            mask_code = _pd.Series(False, index=df.index)
+            matched_fields = []
+            for c in cols_codigo:
+                norm_col = df[c].astype(str).map(_norm_code)
+                mask_c = norm_col == target_code
+                if mask_c.any():
+                    matched_fields.append(c)
+                    mask_code = mask_code | mask_c
+
+            if mask_code.any():
+                resultados = df[mask_code]
+                dedup_cols = [
+                    c for c in [
+                        "CLIENTE",
+                        "REFERENCIA_EXTERNA",
+                        "REFERENCIA_MODELO",
+                        "REFERENCIA_INTERNA",
+                        "INFORME",
+                        "COTIZACION",
+                        "NUMERO",
+                    ]
+                    if c in resultados.columns
+                ]
+                if dedup_cols:
+                    resultados = resultados.drop_duplicates(subset=dedup_cols)
+                resultados = _ordenar_por_relevancia(resultados, [target_code], matched_fields)
+                return resultados, {
+                    'tokens': tokens,
+                    'match_field': ','.join(matched_fields) if matched_fields else 'codigo',
+                    'match': 'exact_code',
+                    'rapidfuzz': False,
+                }
+
     # Detectar patrón tipo 'C 502' o 'c502' y priorizar búsqueda en COTIZACION
     m_c_pref = re.search(r'(?i)\b[cC]\s*0*(\d+)\b', texto_original)
     if m_c_pref and 'COTIZACION' in df.columns:
