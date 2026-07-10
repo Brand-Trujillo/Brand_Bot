@@ -140,6 +140,10 @@ def _formatear_multiples(resultado, intencion: str) -> str:
     return "\n".join(bloques)
 
 
+def _mensaje_sin_coincidencias() -> str:
+    return "Sin coincidencias locales. Prueba con cliente, referencia o informe."
+
+
 def responder_consulta(consulta: str) -> str:
     if not consulta or not isinstance(consulta, str):
         return "Hola, escribe tu consulta para buscar muestras."
@@ -161,13 +165,7 @@ def responder_consulta(consulta: str) -> str:
     resultado, meta = buscar(df, busqueda)
 
     if resultado.empty:
-        return obtener_respuesta_evolution(
-            consulta,
-            system_prompt=(
-                "Eres un asistente de soporte para un sistema de control de muestras de laboratorio. "
-                "Responde de forma amable y clara cuando no encuentres una muestra local."
-            ),
-        )
+        return _mensaje_sin_coincidencias()
 
     intencion = detectar_intencion(consulta)
     if len(resultado) > 1:
@@ -201,15 +199,7 @@ def responder_consulta_burbujas(consulta: str):
     resultado, _meta = buscar(df, busqueda)
 
     if resultado.empty:
-        return [
-            obtener_respuesta_evolution(
-                consulta,
-                system_prompt=(
-                    "Eres un asistente de soporte para un sistema de control de muestras de laboratorio. "
-                    "Responde de forma amable y clara cuando no encuentres una muestra local."
-                ),
-            )
-        ]
+        return [_mensaje_sin_coincidencias()]
 
     intencion = detectar_intencion(consulta)
     if len(resultado) > 1:
