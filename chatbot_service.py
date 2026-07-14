@@ -163,12 +163,17 @@ def _resumen_corto(fila, intencion: str) -> str:
 def _resumen_muestra_multiple(fila) -> str:
     fecha = _fecha_texto(fila.get("FECHA_INGRESO", "N/E"))
     return (
-        f"Cliente: {_valor_texto(fila.get('CLIENTE'))} | "
-        f"Ref. interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))} | "
-        f"Informe: {_valor_texto(fila.get('INFORME'))} | "
+        f"Cliente: {_valor_texto(fila.get('CLIENTE'))}\n"
+        f"Marca: {_marca_texto(fila)}\n"
+        f"Descripcion: {_valor_texto(fila.get('DESCRIPCION'))}\n"
+        f"Referencia / Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))}\n"
+        f"Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}\n"
+        f"Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))}\n"
+        f"N° muestras: {_valor_texto(fila.get('NUMERO'))}\n"
+        f"Informe: {_valor_texto(fila.get('INFORME'))}\n"
         f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
-        f"Estado: {_valor_texto(fila.get('ESTADO'))} | "
-        f"Ubicacion: {_valor_texto(fila.get('UBICACION'))} | "
+        f"Estado: {_valor_texto(fila.get('ESTADO'))}\n"
+        f"Ubicacion: {_valor_texto(fila.get('UBICACION'))}\n"
         f"Fecha recepcion: {fecha}"
     )
 
