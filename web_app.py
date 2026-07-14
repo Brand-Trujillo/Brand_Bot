@@ -6,7 +6,7 @@ from datos import obtener_fuente_datos, obtener_info_datos_locales
 import evolution_api
 
 app = Flask(__name__)
-APP_VERSION = "20260710b"
+APP_VERSION = "20260710c"
 DEPLOY_COMMIT = os.getenv("RENDER_GIT_COMMIT", "local")
 
 
