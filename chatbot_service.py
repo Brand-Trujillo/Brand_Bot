@@ -160,6 +160,19 @@ def _resumen_corto(fila, intencion: str) -> str:
     )
 
 
+def _resumen_muestra_multiple(fila) -> str:
+    fecha = _fecha_texto(fila.get("FECHA_INGRESO", "N/E"))
+    return (
+        f"Cliente: {_valor_texto(fila.get('CLIENTE'))} | "
+        f"Ref. interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))} | "
+        f"Informe: {_valor_texto(fila.get('INFORME'))} | "
+        f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
+        f"Estado: {_valor_texto(fila.get('ESTADO'))} | "
+        f"Ubicacion: {_valor_texto(fila.get('UBICACION'))} | "
+        f"Fecha recepcion: {fecha}"
+    )
+
+
 def _formatear_multiples(resultado, intencion: str) -> str:
     total = len(resultado)
     max_items = 8
@@ -170,7 +183,7 @@ def _formatear_multiples(resultado, intencion: str) -> str:
         bloques.append(f"Te muestro las primeras {max_items}. Si quieres, te ayudo a filtrar por cliente, estado, informe o cotizacion.")
 
     for i, (_, fila) in enumerate(recorte.iterrows(), start=1):
-        detalle = _resumen_corto(fila, intencion)
+        detalle = _resumen_muestra_multiple(fila)
         bloques.append(f"{i}.\n{detalle}")
 
     return "\n".join(bloques)
@@ -255,7 +268,10 @@ def responder_consulta_burbujas(consulta: str):
                 f"Te muestro las primeras {max_items}. Si quieres, te ayudo a filtrar por cliente, estado, informe o cotizacion."
             )
         for i, (_, fila) in enumerate(recorte.iterrows(), start=1):
-            bloques.append(f"{i}.\n{_resumen_fila(fila)}")
+            if _es_registro_equipo(fila):
+                bloques.append(f"{i}.\n{_resumen_fila(fila)}")
+            else:
+                bloques.append(f"{i}.\n{_resumen_muestra_multiple(fila)}")
         return bloques
 
     fila = resultado.iloc[0]
