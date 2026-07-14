@@ -169,6 +169,7 @@ def _normalizar_dataframe_equipos(path: str, sheet_name: str = "") -> pd.DataFra
         "REFERENCIA_INTERNA",
         "SERIE",
         "MARCA",
+        "MAGNITUD",
         "REFERENCIA_MODELO",
         "ULTIMA_CALIBRACION",
         "CALIBRADO_POR",
@@ -184,6 +185,7 @@ def _normalizar_dataframe_equipos(path: str, sheet_name: str = "") -> pd.DataFra
     df["DESCRIPCION"] = df["EQUIPO"]
     df["REFERENCIA_EXTERNA"] = df["SERIE"]
     df["IDENTIFICACION_INTERNA"] = df["REFERENCIA_INTERNA"]
+    df["MAGNITUD"] = df.get("MAGNITUD", "N/E")
     df["ESTADO"] = df["ESTADO_CALIBRACION"]
     df["INFORME"] = df.get("INFORME", "N/E")
     df["COTIZACION"] = df.get("COTIZACION", "N/E")

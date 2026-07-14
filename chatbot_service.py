@@ -77,6 +77,7 @@ def _resumen_fila_equipo(fila) -> str:
         f"Identificacion interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))}\n"
         f"Serie: {_valor_texto(fila.get('SERIE'))}\n"
         f"Marca: {_valor_texto(fila.get('MARCA'))}\n"
+        f"Magnitud: {_valor_texto(fila.get('MAGNITUD'))}\n"
         f"Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))}\n"
         f"Ultima calibracion: {_fecha_texto(fila.get('ULTIMA_CALIBRACION'))}\n"
         f"Calibrado por: {_valor_texto(fila.get('CALIBRADO_POR'))}\n"
@@ -145,7 +146,8 @@ def _resumen_corto(fila, intencion: str) -> str:
             f"Equipo: {_valor_texto(fila.get('EQUIPO'))} | "
             f"Id interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))} | "
             f"Serie: {_valor_texto(fila.get('SERIE'))}\n"
-            f"Marca: {_valor_texto(fila.get('MARCA'))} | Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))} | "
+            f"Marca: {_valor_texto(fila.get('MARCA'))} | Magnitud: {_valor_texto(fila.get('MAGNITUD'))} | "
+            f"Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))} | "
             f"Estado calibracion: {_valor_texto(fila.get('ESTADO_CALIBRACION'))}"
         )
 
