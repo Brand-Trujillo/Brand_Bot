@@ -391,7 +391,19 @@ def cargar_datos():
             LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive"
         except Exception as exc:
             LAST_EQUIPOS_ERROR = f"equipos_onedrive_error: {exc}"
-            LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive_error"
+            # Fallback robusto: si OneDrive falla (403/timeout), usamos el Excel local.
+            equipos_path = obtener_ruta_archivo_equipos()
+            if equipos_path:
+                try:
+                    equipos_sheet = os.getenv("EQUIPOS_SHEET_NAME", SHEET_NAME).strip()
+                    df_equipos = _normalizar_dataframe_equipos(equipos_path, sheet_name=equipos_sheet)
+                    df = pd.concat([df, df_equipos], ignore_index=True, sort=False)
+                    LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive_error+equipos_local_fallback"
+                except Exception as local_exc:
+                    LAST_EQUIPOS_ERROR = f"{LAST_EQUIPOS_ERROR} | equipos_local_fallback_error: {local_exc}"
+                    LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive_error+equipos_local_fallback_error"
+            else:
+                LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive_error"
     else:
         equipos_path = obtener_ruta_archivo_equipos()
         if equipos_path:
