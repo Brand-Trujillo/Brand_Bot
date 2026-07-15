@@ -1,32 +1,8 @@
 from datos import cargar_datos
 from buscador import buscar
 from intenciones import detectar_intencion
-from evolution_api import obtener_respuesta_evolution
 from utilidades import extraer_busqueda
 import pandas as pd
-
-
-def _ordenar_recientes(resultado):
-    if resultado is None or resultado.empty:
-        return resultado
-
-    ordenado = resultado.copy()
-    if 'FECHA_INGRESO' in ordenado.columns:
-        ordenado['_fecha_orden'] = pd.to_datetime(ordenado['FECHA_INGRESO'], errors='coerce')
-    else:
-        ordenado['_fecha_orden'] = pd.NaT
-
-    if 'ITEM' in ordenado.columns:
-        ordenado['_item_orden'] = pd.to_numeric(ordenado['ITEM'], errors='coerce')
-    else:
-        ordenado['_item_orden'] = pd.NA
-
-    ordenado = ordenado.sort_values(
-        by=['_fecha_orden', '_item_orden'],
-        ascending=[False, False],
-        na_position='last',
-    )
-    return ordenado.drop(columns=['_fecha_orden', '_item_orden'])
 
 
 def _ordenar_primera_muestra(resultado):
@@ -254,7 +230,7 @@ def responder_consulta(consulta: str) -> str:
     df = cargar_datos()
 
     busqueda = extraer_busqueda(consulta)
-    resultado, meta = buscar(df, busqueda)
+    resultado, _meta = buscar(df, busqueda)
 
     if resultado.empty:
         return _mensaje_sin_coincidencias()
