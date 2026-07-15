@@ -76,8 +76,8 @@ def _onedrive_download_url(url: str) -> str:
     )
 
 
-def _cargar_desde_onedrive(url: str) -> pd.DataFrame:
-    """Descarga el Excel desde OneDrive y lo carga en memoria.
+def _cargar_desde_onedrive(url: str, sheet_name: str = "", header: int = 6) -> pd.DataFrame:
+    """Descarga un Excel desde OneDrive y lo carga en memoria.
 
     Esto evita problemas de bloqueo cuando el archivo esta abierto localmente.
     """
@@ -88,8 +88,8 @@ def _cargar_desde_onedrive(url: str) -> pd.DataFrame:
     buffer = io.BytesIO(data)
     df = pd.read_excel(
         buffer,
-        sheet_name=SHEET_NAME,
-        header=6,
+        sheet_name=sheet_name or 0,
+        header=header,
     )
     return df
 
@@ -297,10 +297,11 @@ def cargar_datos():
     # Por defecto usamos el archivo local para que coincida con el Excel del equipo.
     # Para usar OneDrive, definir ONEDRIVE_XLSX_URL explicitamente.
     onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", "").strip()
+    equipos_onedrive_url = os.getenv("EQUIPOS_ONEDRIVE_XLSX_URL", "").strip()
 
     if onedrive_url:
         try:
-            df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url))
+            df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url), sheet_name=SHEET_NAME, header=6)
             LAST_DATA_SOURCE = "onedrive"
         except Exception:
             # Fallback seguro: continuar con archivo local si la URL falla.
@@ -315,15 +316,86 @@ def cargar_datos():
     df = _normalizar_dataframe(df)
 
     # Carga opcional de un segundo Excel (control de equipos) y lo une al dataset principal.
-    equipos_path = obtener_ruta_archivo_equipos()
-    if equipos_path:
+    if equipos_onedrive_url:
         try:
             equipos_sheet = os.getenv("EQUIPOS_SHEET_NAME", SHEET_NAME).strip()
-            df_equipos = _normalizar_dataframe_equipos(equipos_path, sheet_name=equipos_sheet)
+            equipos_buffer = _cargar_desde_onedrive(
+                _onedrive_download_url(equipos_onedrive_url),
+                sheet_name=equipos_sheet,
+                header=0,
+            )
+            df_equipos = equipos_buffer.dropna(how="all").reset_index(drop=True)
+            df_equipos = df_equipos.rename(columns={col: col for col in df_equipos.columns})
+            temp_path = None
+            rename_map = {}
+            for col in df_equipos.columns:
+                norm = _texto_normalizado(col)
+                if norm == "EQUIPO":
+                    rename_map[col] = "EQUIPO"
+                elif norm == "IDENTIFICACION INTERNA":
+                    rename_map[col] = "REFERENCIA_INTERNA"
+                elif norm == "SERIE":
+                    rename_map[col] = "SERIE"
+                elif norm == "MARCA":
+                    rename_map[col] = "MARCA"
+                elif norm == "MAGNITUD":
+                    rename_map[col] = "MAGNITUD"
+                elif norm == "MODELO":
+                    rename_map[col] = "REFERENCIA_MODELO"
+                elif norm in {"ULTIMA CALIBRACION", "ULTIMA CALIBRACION "}:
+                    rename_map[col] = "ULTIMA_CALIBRACION"
+                elif norm == "CALIBRADO POR":
+                    rename_map[col] = "CALIBRADO_POR"
+                elif norm == "PROXIMA CALIBRACION":
+                    rename_map[col] = "PROXIMA_CALIBRACION"
+                elif norm == "TIEMPO DE ALARMA":
+                    rename_map[col] = "TIEMPO_ALARMA"
+                elif norm == "ESTADO DE CALIBRACION":
+                    rename_map[col] = "ESTADO_CALIBRACION"
+
+            df_equipos = df_equipos.rename(columns=rename_map)
+            for col in [
+                "EQUIPO",
+                "REFERENCIA_INTERNA",
+                "SERIE",
+                "MARCA",
+                "MAGNITUD",
+                "REFERENCIA_MODELO",
+                "ULTIMA_CALIBRACION",
+                "CALIBRADO_POR",
+                "PROXIMA_CALIBRACION",
+                "TIEMPO_ALARMA",
+                "ESTADO_CALIBRACION",
+            ]:
+                if col not in df_equipos.columns:
+                    df_equipos[col] = "N/E"
+
+            df_equipos["CLIENTE"] = df_equipos["EQUIPO"]
+            df_equipos["DESCRIPCION"] = df_equipos["EQUIPO"]
+            df_equipos["REFERENCIA_EXTERNA"] = df_equipos["SERIE"]
+            df_equipos["IDENTIFICACION_INTERNA"] = df_equipos["REFERENCIA_INTERNA"]
+            df_equipos["MAGNITUD"] = df_equipos.get("MAGNITUD", "N/E")
+            df_equipos["ESTADO"] = df_equipos["ESTADO_CALIBRACION"]
+            df_equipos["INFORME"] = df_equipos.get("INFORME", "N/E")
+            df_equipos["COTIZACION"] = df_equipos.get("COTIZACION", "N/E")
+            df_equipos["UBICACION"] = df_equipos.get("UBICACION", "N/E")
+            df_equipos["NUMERO"] = df_equipos.get("NUMERO", "N/E")
+            df_equipos["FECHA_INGRESO"] = df_equipos.get("FECHA_INGRESO", pd.NA)
+            df_equipos["TIPO_REGISTRO"] = "equipo"
             df = pd.concat([df, df_equipos], ignore_index=True, sort=False)
-            LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos"
+            LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive"
         except Exception:
-            LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_error"
+            LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive_error"
+    else:
+        equipos_path = obtener_ruta_archivo_equipos()
+        if equipos_path:
+            try:
+                equipos_sheet = os.getenv("EQUIPOS_SHEET_NAME", SHEET_NAME).strip()
+                df_equipos = _normalizar_dataframe_equipos(equipos_path, sheet_name=equipos_sheet)
+                df = pd.concat([df, df_equipos], ignore_index=True, sort=False)
+                LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos"
+            except Exception:
+                LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_error"
 
     return df
 
