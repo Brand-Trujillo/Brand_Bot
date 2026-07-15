@@ -29,6 +29,29 @@ def _ordenar_recientes(resultado):
     return ordenado.drop(columns=['_fecha_orden', '_item_orden'])
 
 
+def _ordenar_primera_muestra(resultado):
+    if resultado is None or resultado.empty:
+        return resultado
+
+    ordenado = resultado.copy()
+    if 'FECHA_INGRESO' in ordenado.columns:
+        ordenado['_fecha_orden'] = pd.to_datetime(ordenado['FECHA_INGRESO'], errors='coerce')
+    else:
+        ordenado['_fecha_orden'] = pd.NaT
+
+    if 'ITEM' in ordenado.columns:
+        ordenado['_item_orden'] = pd.to_numeric(ordenado['ITEM'], errors='coerce')
+    else:
+        ordenado['_item_orden'] = pd.NA
+
+    ordenado = ordenado.sort_values(
+        by=['_fecha_orden', '_item_orden'],
+        ascending=[True, True],
+        na_position='last',
+    )
+    return ordenado.drop(columns=['_fecha_orden', '_item_orden'])
+
+
 def _valor_texto(valor) -> str:
     # Mostrar el contenido tal como viene de la celda.
     # Solo evitamos imprimir literales tecnicos de pandas para celdas vacias.
@@ -181,17 +204,32 @@ def _resumen_muestra_multiple(fila) -> str:
 def _formatear_multiples(resultado, intencion: str) -> str:
     total = len(resultado)
     max_items = 8
-    ordenado = _ordenar_recientes(resultado)
-    recorte = ordenado.head(max_items)
+    recorte = _ordenar_primera_muestra(resultado).head(max_items)
     bloques = [f"Encontre {total} muestra(s) que coinciden."]
     if total > max_items:
-        bloques.append(f"Te muestro las primeras {max_items}. Si quieres, te ayudo a filtrar por cliente, estado, informe o cotizacion.")
+        bloques.append(f"Te muestro las {max_items} coincidencias mas relevantes. Si quieres, te ayudo a filtrar por cliente, estado, informe o cotizacion.")
 
     for i, (_, fila) in enumerate(recorte.iterrows(), start=1):
         detalle = _resumen_muestra_multiple(fila)
         bloques.append(f"{i}.\n{detalle}")
 
     return "\n".join(bloques)
+
+
+def _formatear_multiples_equipos(resultado) -> list[str]:
+    total = len(resultado)
+    max_items = 8
+    recorte = _ordenar_primera_muestra(resultado).head(max_items)
+    bloques = [f"Encontre {total} equipo(s) que coinciden."]
+    if total > max_items:
+        bloques.append(
+            f"Te muestro los {max_items} equipos mas relevantes. Si quieres, te ayudo a filtrar por cliente, estado o marca."
+        )
+
+    for i, (_, fila) in enumerate(recorte.iterrows(), start=1):
+        bloques.append(f"{i}.\n{_resumen_fila_equipo(fila)}")
+
+    return bloques
 
 
 def _mensaje_sin_coincidencias() -> str:
@@ -223,6 +261,8 @@ def responder_consulta(consulta: str) -> str:
 
     intencion = detectar_intencion(consulta)
     if len(resultado) > 1:
+        if all(_es_registro_equipo(fila) for _, fila in resultado.iterrows()):
+            return _formatear_multiples_equipos(resultado)
         return _formatear_multiples(resultado, intencion)
 
     fila = resultado.iloc[0]
@@ -263,14 +303,25 @@ def responder_consulta_burbujas(consulta: str):
 
     intencion = detectar_intencion(consulta)
     if len(resultado) > 1:
+        if all(_es_registro_equipo(fila) for _, fila in resultado.iterrows()):
+            total = len(resultado)
+            max_items = 8
+            recorte = _ordenar_primera_muestra(resultado).head(max_items)
+            bloques = [f"Encontre {total} equipo(s) que coinciden."]
+            if total > max_items:
+                bloques.append(
+                    f"Te muestro los {max_items} equipos mas relevantes. Si quieres, te ayudo a filtrar por cliente, estado o marca."
+                )
+            for i, (_, fila) in enumerate(recorte.iterrows(), start=1):
+                bloques.append(f"{i}.\n{_resumen_fila_equipo(fila)}")
+            return bloques
         total = len(resultado)
         max_items = 8
-        ordenado = _ordenar_recientes(resultado)
-        recorte = ordenado.head(max_items)
+        recorte = _ordenar_primera_muestra(resultado).head(max_items)
         bloques = [f"Encontre {total} muestra(s) que coinciden."]
         if total > max_items:
             bloques.append(
-                f"Te muestro las primeras {max_items}. Si quieres, te ayudo a filtrar por cliente, estado, informe o cotizacion."
+                f"Te muestro las {max_items} coincidencias mas relevantes. Si quieres, te ayudo a filtrar por cliente, estado, informe o cotizacion."
             )
         for i, (_, fila) in enumerate(recorte.iterrows(), start=1):
             if _es_registro_equipo(fila):

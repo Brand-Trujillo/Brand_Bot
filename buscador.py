@@ -1,4 +1,27 @@
 import re
+import unicodedata
+
+
+SINONIMOS_TOKENS = {
+    "multitoma": ["multitoma", "extension", "extencion", "salidas", "puertos"],
+    "extension": ["extension", "extencion", "multitoma"],
+    "extencion": ["extencion", "extension", "multitoma"],
+}
+
+
+def _normalizar_texto(texto):
+    texto = str(texto or "").strip().lower()
+    return unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
+
+
+def _variantes_token(token):
+    token_norm = _normalizar_texto(token)
+    variantes = [token_norm]
+    for sinonimo in SINONIMOS_TOKENS.get(token_norm, []):
+        sinonimo_norm = _normalizar_texto(sinonimo)
+        if sinonimo_norm and sinonimo_norm not in variantes:
+            variantes.append(sinonimo_norm)
+    return variantes
 
 
 def _ordenar_por_relevancia(df, tokens, campos_prioritarios=None):
@@ -38,7 +61,7 @@ def _ordenar_por_relevancia(df, tokens, campos_prioritarios=None):
     return ordenado.drop(columns=["_score_busqueda"])
 
 def limpiar_texto(texto):
-    texto = texto.lower()
+    texto = _normalizar_texto(texto)
 
     palabras_ignorar = [
         "donde", "dime", "cuando", "llego", "está", "esta", "la", "el", "los", "las",
@@ -63,7 +86,7 @@ def buscar(df, texto):
     Ejemplo: "certecnica en custodia" o "cidet enviado"
     """
     
-    texto_original = texto.lower()
+    texto_original = _normalizar_texto(texto)
     texto_limpio = limpiar_texto(texto)
 
     # Estados conocidos
@@ -110,8 +133,8 @@ def buscar(df, texto):
         and not estado_tokens
         and 'CLIENTE' in df.columns
     ):
-        t = text_tokens[0].strip().lower()
-        mask_cliente = df['CLIENTE'].astype(str).str.strip().str.lower() == t
+        t = _normalizar_texto(text_tokens[0])
+        mask_cliente = df['CLIENTE'].astype(str).map(_normalizar_texto) == t
         if mask_cliente.any():
             return df[mask_cliente], {
                 'tokens': tokens,
@@ -140,7 +163,17 @@ def buscar(df, texto):
         def _norm_code(v: str) -> str:
             return re.sub(r"[^A-Za-z0-9]", "", str(v).upper())
 
-        target_code = _norm_code(consulta_raw)
+        candidatos_codigo = [
+            _norm_code(t)
+            for t in re.findall(r"[A-Za-z0-9]+(?:[-_/][A-Za-z0-9]+)+", consulta_raw)
+        ]
+        if not candidatos_codigo:
+            candidatos_codigo = [
+                _norm_code(t)
+                for t in re.findall(r"\b[A-Za-z]{1,6}[-_/]?\d+[A-Za-z0-9-_/]*\b", consulta_raw)
+            ]
+        candidatos_codigo = [c for c in candidatos_codigo if c]
+        target_code = candidatos_codigo[0] if candidatos_codigo else _norm_code(consulta_raw)
         if target_code and cols_codigo:
             import pandas as _pd
             mask_code = _pd.Series(False, index=df.index)
@@ -385,7 +418,7 @@ def buscar(df, texto):
         for campo in campos_objetivo:
             if campo in df.columns:
                 serie_raw = df[campo].astype(str).fillna('')
-                serie = serie_raw.str.lower()
+                serie = serie_raw.map(_normalizar_texto)
 
                 # 1) Búsqueda exacta sobre el campo (trimmed)
                 if filtros:
@@ -400,7 +433,9 @@ def buscar(df, texto):
                             mask_contains = serie.str.contains(re.escape(f), na=False)
                             mask_exact = mask_exact | (mask_num | mask_contains)
                         else:
-                            mask_exact = mask_exact | (serie.str.strip() == f)
+                            variantes = _variantes_token(f)
+                            for variante in variantes:
+                                mask_exact = mask_exact | (serie.str.strip() == variante)
                     if mask_exact.any():
                         resultados = _ordenar_por_relevancia(df[mask_exact], tokens, [campo])
                         return resultados, {'tokens': tokens, 'match_field': campo, 'match': 'exact', 'rapidfuzz': False}
@@ -413,7 +448,10 @@ def buscar(df, texto):
                         for f in filtros:
                             mask_sub = mask_sub | serie.str.contains(re.escape(f), na=False)
                     else:
-                        pattern = '|'.join([re.escape(f) for f in filtros])
+                        patrones = []
+                        for f in filtros:
+                            patrones.extend(re.escape(variante) for variante in _variantes_token(f))
+                        pattern = '|'.join(dict.fromkeys(patrones))
                         mask_sub = serie.str.contains(pattern, na=False)
 
                     if mask_sub.any():
@@ -458,17 +496,19 @@ def buscar(df, texto):
     for t in text_tokens:
         def fila_coincide(fila):
             for val in fila:
-                s = str(val).lower()
+                s = _normalizar_texto(val)
                 # chequeo rápido por substring primero
-                if t in s:
+                variantes = _variantes_token(t)
+                if any(variante in s for variante in variantes):
                     return True
                 # fuzzy check
-                score = fuzzy_match_score(t, s)
-                if score >= UMBRAL:
-                    return True
+                for variante in variantes:
+                    score = fuzzy_match_score(variante, s)
+                    if score >= UMBRAL:
+                        return True
             return False
 
-        mask_token = df_busqueda.astype(str).apply(lambda fila: fila_coincide(fila.str.lower()), axis=1)
+        mask_token = df_busqueda.astype(str).apply(fila_coincide, axis=1)
         mask = mask & mask_token
 
     resultados = df[mask]

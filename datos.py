@@ -17,6 +17,8 @@ DEFAULT_ONEDRIVE_XLSX_URL = (
 
 # Fuente cargada en memoria para diagnostico
 LAST_DATA_SOURCE = "unknown"
+LAST_MAIN_ERROR = ""
+LAST_EQUIPOS_ERROR = ""
 
 
 def obtener_ruta_archivo_equipos() -> str:
@@ -293,7 +295,9 @@ def _normalizar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def cargar_datos():
-    global LAST_DATA_SOURCE
+    global LAST_DATA_SOURCE, LAST_MAIN_ERROR, LAST_EQUIPOS_ERROR
+    LAST_MAIN_ERROR = ""
+    LAST_EQUIPOS_ERROR = ""
     # Por defecto usamos el archivo local para que coincida con el Excel del equipo.
     # Para usar OneDrive, definir ONEDRIVE_XLSX_URL explicitamente.
     onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", "").strip()
@@ -303,8 +307,9 @@ def cargar_datos():
         try:
             df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url), sheet_name=SHEET_NAME, header=6)
             LAST_DATA_SOURCE = "onedrive"
-        except Exception:
+        except Exception as exc:
             # Fallback seguro: continuar con archivo local si la URL falla.
+            LAST_MAIN_ERROR = f"onedrive_main_error: {exc}"
             archivo_path = obtener_ruta_archivo_local()
             df = _leer_excel_local(archivo_path, sheet_name=SHEET_NAME, header=6)
             LAST_DATA_SOURCE = "local_fallback"
@@ -384,7 +389,8 @@ def cargar_datos():
             df_equipos["TIPO_REGISTRO"] = "equipo"
             df = pd.concat([df, df_equipos], ignore_index=True, sort=False)
             LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive"
-        except Exception:
+        except Exception as exc:
+            LAST_EQUIPOS_ERROR = f"equipos_onedrive_error: {exc}"
             LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive_error"
     else:
         equipos_path = obtener_ruta_archivo_equipos()
@@ -394,7 +400,8 @@ def cargar_datos():
                 df_equipos = _normalizar_dataframe_equipos(equipos_path, sheet_name=equipos_sheet)
                 df = pd.concat([df, df_equipos], ignore_index=True, sort=False)
                 LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos"
-            except Exception:
+            except Exception as exc:
+                LAST_EQUIPOS_ERROR = f"equipos_local_error: {exc}"
                 LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_error"
 
     return df
@@ -419,4 +426,6 @@ def obtener_info_datos_locales() -> dict:
         "ruta_equipos": ruta_equipos,
         "equipos_existe": equipos_existe,
         "equipos_mtime": equipos_mtime,
+        "main_error": LAST_MAIN_ERROR,
+        "equipos_error": LAST_EQUIPOS_ERROR,
     }
