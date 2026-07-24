@@ -2,6 +2,8 @@ import pandas as pd
 import os
 import sys
 import io
+import sqlite3
+import tempfile
 import urllib.parse
 import urllib.request
 import unicodedata
@@ -10,10 +12,27 @@ import unicodedata
 ARCHIVO = "Control de muestras_2026.xlsx"
 SHEET_NAME = "CONTROL_MUESTRAS_2026"
 DEFAULT_ONEDRIVE_XLSX_URL = (
-    "https://ainsp.sharepoint.com/:x:/r/sites/TodoNYCE/nycecolombia/"
-    "HSQ%20Interno/Muestras%20en%20custodia/F3T09-03%20Control%20de%20"
-    "muestras_2026.xlsx?d=w34336858a30b4b0a98962963a3631f0f&csf=1&web=1&e=r7iItR"
+    "https://docs.google.com/spreadsheets/d/"
+    "18IQ-OmkwgfDTUxxfXPOxzcXu-NpAIR2D/edit?usp=drive_link&ouid="
+    "116660029921044598774&rtpof=true&sd=true"
 )
+DEFAULT_ONEDRIVE_DB_URL = (
+    "https://ainsp.sharepoint.com/:u:/r/sites/TodoNYCE/nycecolombia/"
+    "Laboratorio/T%C3%A9cnico/7.8%20INFORMES%20DE%20ENSAYO/BASES%20DE%20DATOS%20"
+    "(Informe%20de%20ensayos)/BD_Control_Muestras/lencdb.db?csf=1&web=1&e=SAFRHc"
+)
+DEFAULT_LOCAL_DB_PATHS = [
+    # Nueva ruta principal (OneDrive sincronizado) para base de muestras.
+    (
+        r"C:\Users\RentAdvisor\OneDrive - QIMA\Todo NYCE\nycecolombia\Laboratorio\Técnico"
+        r"\7.8 INFORMES DE ENSAYO\BASES DE DATOS (Informe de ensayos)\BD_Control_Muestras\lencdb.db"
+    ),
+    # Ruta heredada: se conserva como fallback para no romper entornos previos.
+    (
+        r"C:\Users\RentAdvisor\QIMA\NYCE COLOMBIA - Laboratorio (1)\Técnico\7.8 INFORMES DE ENSAYO"
+        r"\BASES DE DATOS (Informe de ensayos)\BD_Control_Muestras\lencdb.db"
+    ),
+]
 
 # Fuente cargada en memoria para diagnostico
 LAST_DATA_SOURCE = "unknown"
@@ -36,6 +55,34 @@ def obtener_ruta_archivo_equipos() -> str:
     if os.path.exists(default_local):
         return default_local
     return ""
+
+
+def obtener_ruta_db_local() -> str:
+    """Devuelve la ruta de la base SQLite local si existe."""
+    custom_path = os.getenv("DATOS_DB_PATH", "").strip()
+    if custom_path:
+        # Soporta rutas relativas al proyecto para despliegues (ej. DATOS_DB_PATH=lencdb.db).
+        if os.path.isabs(custom_path):
+            return custom_path
+        return _resource_path(custom_path)
+
+    # Prioridad local del proyecto (útil para despliegues sin acceso a red interna).
+    project_db = _resource_path("lencdb.db")
+    if os.path.exists(project_db):
+        return project_db
+
+    for db_path in DEFAULT_LOCAL_DB_PATHS:
+        if os.path.exists(db_path):
+            return db_path
+    return ""
+
+
+def obtener_url_db() -> str:
+    """Devuelve URL de la base SQLite de muestras (opcional)."""
+    custom_url = os.getenv("DATOS_DB_URL", "").strip()
+    if custom_url:
+        return custom_url
+    return DEFAULT_ONEDRIVE_DB_URL
 
 
 def obtener_ruta_archivo_local() -> str:
@@ -64,8 +111,24 @@ def _resource_path(rel_path: str) -> str:
 
 
 def _onedrive_download_url(url: str) -> str:
-    """Convierte una URL de OneDrive/SharePoint a descarga directa cuando es posible."""
+    """Convierte una URL de OneDrive/SharePoint o Google Sheets a descarga directa."""
     parsed = urllib.parse.urlparse(url)
+    
+    # Google Sheets compartido en modo "edit" -> export directo en formato Excel.
+    if "docs.google.com" in parsed.netloc and "/spreadsheets/d/" in parsed.path:
+        parts = [p for p in parsed.path.split("/") if p]
+        sheet_id = ""
+        if "d" in parts:
+            idx = parts.index("d")
+            if idx + 1 < len(parts):
+                sheet_id = parts[idx + 1]
+
+        if sheet_id:
+            query = urllib.parse.parse_qs(parsed.query)
+            gid = (query.get("gid") or ["0"])[0]
+            export_query = urllib.parse.urlencode({"format": "xlsx", "gid": gid})
+            return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?{export_query}"
+
     query = urllib.parse.parse_qs(parsed.query)
 
     # Share links de OneDrive/SharePoint suelen aceptar download=1
@@ -109,6 +172,50 @@ def _leer_excel_local(path: str, sheet_name: str = "", header: int = 6) -> pd.Da
     if not xls.sheet_names:
         raise ValueError(f"El archivo no contiene hojas: {path}")
     return pd.read_excel(path, sheet_name=xls.sheet_names[0], header=header)
+
+
+def _cargar_desde_sqlite(path: str) -> pd.DataFrame:
+    """Carga muestras desde la base SQLite local del laboratorio."""
+    query = """
+        SELECT
+            id,
+            codigoInterno,
+            rotuloCliente,
+            nombreCliente,
+            descripcion,
+            marca,
+            referencia,
+            estado,
+            ubicacion,
+            observacionAlmacenamiento,
+            fechaRecepcion,
+            numeroInforme,
+            numeroCotizacion,
+            remision
+        FROM muestras
+    """
+    with sqlite3.connect(path) as con:
+        return pd.read_sql_query(query, con)
+
+
+def _cargar_desde_sqlite_url(url: str) -> pd.DataFrame:
+    """Descarga una base SQLite desde URL y consulta la tabla de muestras."""
+    request = urllib.request.Request(_onedrive_download_url(url), method="GET")
+    with urllib.request.urlopen(request, timeout=45) as response:
+        data = response.read()
+
+    temp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as temp_file:
+            temp_file.write(data)
+            temp_path = temp_file.name
+        return _cargar_desde_sqlite(temp_path)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
 
 
 def _texto_normalizado(valor) -> str:
@@ -294,31 +401,102 @@ def _normalizar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _normalizar_dataframe_sqlite(df: pd.DataFrame) -> pd.DataFrame:
+    """Normaliza la base SQLite local al esquema esperado por el bot."""
+    rename_map = {
+        "id": "ITEM",
+        "fechaRecepcion": "FECHA_INGRESO",
+        "nombreCliente": "CLIENTE",
+        "descripcion": "DESCRIPCION",
+        "marca": "MARCA",
+        "referencia": "REFERENCIA_MODELO",
+        "rotuloCliente": "REFERENCIA_EXTERNA",
+        "codigoInterno": "REFERENCIA_INTERNA",
+        "numeroInforme": "INFORME",
+        "numeroCotizacion": "COTIZACION",
+        "ubicacion": "UBICACION",
+        "estado": "ESTADO",
+        "observacionAlmacenamiento": "OBSERVACIONES",
+        "remision": "NUMERO",
+    }
+    df = df.rename(columns=rename_map).copy()
+
+    for col in [
+        "ITEM",
+        "FECHA_INGRESO",
+        "CLIENTE",
+        "DESCRIPCION",
+        "MARCA",
+        "REFERENCIA_MODELO",
+        "REFERENCIA_EXTERNA",
+        "REFERENCIA_INTERNA",
+        "INFORME",
+        "NUMERO",
+        "COTIZACION",
+        "UBICACION",
+        "ESTADO",
+        "OBSERVACIONES",
+    ]:
+        if col not in df.columns:
+            df[col] = pd.NA
+
+    df["ID"] = df["ITEM"]
+    fechas = pd.to_datetime(df["FECHA_INGRESO"], errors="coerce")
+    df["AÑO"] = fechas.dt.year.astype("Int64")
+    df["MARCA"] = df["MARCA"].astype("string").str.strip().replace({"": pd.NA}).fillna("N/E")
+    df["REFERENCIA"] = df["REFERENCIA_EXTERNA"]
+    df["SERIE"] = df["REFERENCIA_INTERNA"]
+    df["IDENTIFICACION_INTERNA"] = df["REFERENCIA_INTERNA"]
+    df["TIPO_REGISTRO"] = "muestra"
+    df["ESTADO"] = df["ESTADO"].astype("string").str.replace("_", " ", regex=False).str.title()
+
+    return df
+
+
 def cargar_datos():
     global LAST_DATA_SOURCE, LAST_MAIN_ERROR, LAST_EQUIPOS_ERROR
     LAST_MAIN_ERROR = ""
     LAST_EQUIPOS_ERROR = ""
-    # Por defecto usamos el archivo local para que coincida con el Excel del equipo.
-    # Para usar OneDrive, definir ONEDRIVE_XLSX_URL explicitamente.
-    onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", "").strip()
+    db_path = obtener_ruta_db_local()
+    db_url = obtener_url_db()
+    # URL remota principal para muestras en producción (OneDrive o Google Sheets).
+    onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", DEFAULT_ONEDRIVE_XLSX_URL).strip()
     equipos_onedrive_url = os.getenv("EQUIPOS_ONEDRIVE_XLSX_URL", "").strip()
 
-    if onedrive_url:
+    if db_path:
+        try:
+            df = _cargar_desde_sqlite(db_path)
+            df = _normalizar_dataframe_sqlite(df)
+            LAST_DATA_SOURCE = "sqlite"
+        except Exception as exc:
+            LAST_MAIN_ERROR = f"sqlite_main_error: {exc}"
+            db_path = ""
+
+    if not db_path and onedrive_url:
         try:
             df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url), sheet_name=SHEET_NAME, header=6)
             LAST_DATA_SOURCE = "onedrive"
         except Exception as exc:
-            # Fallback seguro: continuar con archivo local si la URL falla.
+            # Fallback seguro: continuar con fuentes alternativas si la URL falla.
             LAST_MAIN_ERROR = f"onedrive_main_error: {exc}"
-            archivo_path = obtener_ruta_archivo_local()
-            df = _leer_excel_local(archivo_path, sheet_name=SHEET_NAME, header=6)
-            LAST_DATA_SOURCE = "local_fallback"
-    else:
+            onedrive_url = ""
+
+    if not db_path and not onedrive_url and db_url:
+        try:
+            df = _cargar_desde_sqlite_url(db_url)
+            df = _normalizar_dataframe_sqlite(df)
+            LAST_DATA_SOURCE = "sqlite_url"
+        except Exception as exc:
+            LAST_MAIN_ERROR = f"sqlite_url_main_error: {exc}"
+            db_url = ""
+
+    if not db_path and not onedrive_url and not db_url:
         archivo_path = obtener_ruta_archivo_local()
         df = _leer_excel_local(archivo_path, sheet_name=SHEET_NAME, header=6)
-        LAST_DATA_SOURCE = "local"
+        LAST_DATA_SOURCE = "local_fallback" if LAST_MAIN_ERROR else "local"
 
-    df = _normalizar_dataframe(df)
+    if LAST_DATA_SOURCE not in {"sqlite", "sqlite_url"}:
+        df = _normalizar_dataframe(df)
 
     # Carga opcional de un segundo Excel (control de equipos) y lo une al dataset principal.
     if equipos_onedrive_url:
@@ -428,6 +606,10 @@ def obtener_info_datos_locales() -> dict:
     ruta = obtener_ruta_archivo_local()
     existe = os.path.exists(ruta)
     mtime = os.path.getmtime(ruta) if existe else None
+    ruta_db = obtener_ruta_db_local()
+    db_existe = os.path.exists(ruta_db) if ruta_db else False
+    db_mtime = os.path.getmtime(ruta_db) if db_existe else None
+    db_url = obtener_url_db()
     ruta_equipos = obtener_ruta_archivo_equipos()
     equipos_existe = os.path.exists(ruta_equipos) if ruta_equipos else False
     equipos_mtime = os.path.getmtime(ruta_equipos) if equipos_existe else None
@@ -435,6 +617,10 @@ def obtener_info_datos_locales() -> dict:
         "ruta": ruta,
         "existe": existe,
         "mtime": mtime,
+        "ruta_db": ruta_db,
+        "db_existe": db_existe,
+        "db_mtime": db_mtime,
+        "db_url": db_url,
         "ruta_equipos": ruta_equipos,
         "equipos_existe": equipos_existe,
         "equipos_mtime": equipos_mtime,

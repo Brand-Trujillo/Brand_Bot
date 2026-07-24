@@ -1,18 +1,24 @@
 import os
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from chatbot_service import responder_consulta_burbujas
 from datos import obtener_fuente_datos, obtener_info_datos_locales
 import evolution_api
 
 app = Flask(__name__)
-APP_VERSION = "20260710c"
+APP_VERSION = "20260724a"
 DEPLOY_COMMIT = os.getenv("RENDER_GIT_COMMIT", "local")
 
 
 @app.get("/")
 def index():
     return render_template("index.html", app_version=APP_VERSION)
+
+
+@app.get("/favicon.ico")
+def favicon_ico():
+    # Compatibilidad con navegadores que siguen solicitando favicon.ico en raiz.
+    return send_from_directory(app.static_folder, "favicon.ico", mimetype="image/x-icon")
 
 
 @app.get("/health")
