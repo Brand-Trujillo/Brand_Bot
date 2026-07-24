@@ -145,17 +145,44 @@ def _cargar_desde_onedrive(url: str, sheet_name: str = "", header: int = 6) -> p
     """Descarga un Excel desde OneDrive y lo carga en memoria.
 
     Esto evita problemas de bloqueo cuando el archivo esta abierto localmente.
+    Reintenta con diferentes headers/hojas si la primera falla (para soportar variantes de estructura).
     """
     request = urllib.request.Request(url, method="GET")
     with urllib.request.urlopen(request, timeout=45) as response:
         data = response.read()
 
     buffer = io.BytesIO(data)
-    df = pd.read_excel(
-        buffer,
-        sheet_name=sheet_name or 0,
-        header=header,
-    )
+    
+    # Estrategia 1: Usar sheet_name y header especificados
+    try:
+        df = pd.read_excel(
+            buffer,
+            sheet_name=sheet_name or 0,
+            header=header,
+        )
+        # Validar que el dataframe tiene columnas reconocibles
+        if len(df.columns) > 5:
+            return df
+    except Exception:
+        pass
+
+    # Estrategia 2: Si falla, intentar con header autodetección (primera hoja)
+    buffer.seek(0)
+    try:
+        xls = pd.ExcelFile(buffer)
+        for sheet_idx, sheet in enumerate(xls.sheet_names):
+            try:
+                df = pd.read_excel(buffer, sheet_name=sheet, header=0)
+                if len(df.columns) > 5:  # Validación básica
+                    return df
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Estrategia 3: Sin header, dejar que el usuario sepa que es un fallback
+    buffer.seek(0)
+    df = pd.read_excel(buffer, sheet_name=sheet_name or 0, header=None)
     return df
 
 
@@ -478,7 +505,9 @@ def cargar_datos():
     # Prioridad 2: Google Sheets / OneDrive remoto (producción con acceso a URLs públicas)
     if onedrive_url:
         try:
-            df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url), sheet_name=SHEET_NAME, header=6)
+            # Para Google Sheets: no forzar SHEET_NAME específico, dejar que autodetecte
+            # Para OneDrive: intentar con SHEET_NAME primero, luego autodetectar
+            df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url), sheet_name="", header=6)
             LAST_DATA_SOURCE = "onedrive"
             if LAST_DATA_SOURCE not in {"sqlite", "sqlite_url"}:
                 df = _normalizar_dataframe(df)
