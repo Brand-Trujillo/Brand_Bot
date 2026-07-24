@@ -462,41 +462,57 @@ def cargar_datos():
     # URL remota principal para muestras en producción (OneDrive o Google Sheets).
     onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", DEFAULT_ONEDRIVE_XLSX_URL).strip()
     equipos_onedrive_url = os.getenv("EQUIPOS_ONEDRIVE_XLSX_URL", "").strip()
+    
+    df = None  # Inicializar para evitar NameError
 
+    # Prioridad 1: Base SQLite local (desarrollo/laboratorio con acceso a red interna)
     if db_path:
         try:
             df = _cargar_desde_sqlite(db_path)
             df = _normalizar_dataframe_sqlite(df)
             LAST_DATA_SOURCE = "sqlite"
+            return _post_procesar_datos(df)
         except Exception as exc:
             LAST_MAIN_ERROR = f"sqlite_main_error: {exc}"
-            db_path = ""
 
-    if not db_path and onedrive_url:
+    # Prioridad 2: Google Sheets / OneDrive remoto (producción con acceso a URLs públicas)
+    if onedrive_url:
         try:
             df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url), sheet_name=SHEET_NAME, header=6)
             LAST_DATA_SOURCE = "onedrive"
+            if LAST_DATA_SOURCE not in {"sqlite", "sqlite_url"}:
+                df = _normalizar_dataframe(df)
+            return _post_procesar_datos(df)
         except Exception as exc:
-            # Fallback seguro: continuar con fuentes alternativas si la URL falla.
             LAST_MAIN_ERROR = f"onedrive_main_error: {exc}"
-            onedrive_url = ""
 
-    if not db_path and not onedrive_url and db_url:
+    # Prioridad 3: Base SQLite remota (fallback cuando URLs públicas no disponibles)
+    if db_url:
         try:
             df = _cargar_desde_sqlite_url(db_url)
             df = _normalizar_dataframe_sqlite(df)
             LAST_DATA_SOURCE = "sqlite_url"
+            return _post_procesar_datos(df)
         except Exception as exc:
             LAST_MAIN_ERROR = f"sqlite_url_main_error: {exc}"
-            db_url = ""
 
-    if not db_path and not onedrive_url and not db_url:
+    # Prioridad 4: Excel local (último fallback cuando todo falla)
+    try:
         archivo_path = obtener_ruta_archivo_local()
         df = _leer_excel_local(archivo_path, sheet_name=SHEET_NAME, header=6)
         LAST_DATA_SOURCE = "local_fallback" if LAST_MAIN_ERROR else "local"
+        if LAST_DATA_SOURCE not in {"sqlite", "sqlite_url"}:
+            df = _normalizar_dataframe(df)
+        return _post_procesar_datos(df)
+    except Exception as exc:
+        LAST_MAIN_ERROR = f"local_fallback_error: {exc}"
+        raise
 
-    if LAST_DATA_SOURCE not in {"sqlite", "sqlite_url"}:
-        df = _normalizar_dataframe(df)
+
+def _post_procesar_datos(df: pd.DataFrame) -> pd.DataFrame:
+    """Aplica procesamiento adicional (equipos) tras cargar datos principales."""
+    global LAST_DATA_SOURCE, LAST_EQUIPOS_ERROR
+    equipos_onedrive_url = os.getenv("EQUIPOS_ONEDRIVE_XLSX_URL", "").strip()
 
     # Carga opcional de un segundo Excel (control de equipos) y lo une al dataset principal.
     if equipos_onedrive_url:
