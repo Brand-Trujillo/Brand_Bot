@@ -1,12 +1,13 @@
 import os
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, jsonify, render_template, request, send_from_directory, Response
+import pandas as pd
 
 from chatbot_service import responder_consulta_burbujas
-from datos import obtener_fuente_datos, obtener_info_datos_locales
+from datos import cargar_datos, obtener_fuente_datos, obtener_info_datos_locales
 import evolution_api
 
 app = Flask(__name__)
-APP_VERSION = "20260724a"
+APP_VERSION = "20260727e"
 DEPLOY_COMMIT = os.getenv("RENDER_GIT_COMMIT", "local")
 
 
@@ -17,8 +18,22 @@ def index():
 
 @app.get("/favicon.ico")
 def favicon_ico():
-    # Compatibilidad con navegadores que siguen solicitando favicon.ico en raiz.
-    return send_from_directory(app.static_folder, "favicon.ico", mimetype="image/x-icon")
+    # Compatibilidad robusta: intenta archivos locales y, si faltan,
+    # responde un SVG embebido para evitar 404 en producción.
+    for filename, mimetype in (
+        ("favicon-v2.ico", "image/x-icon"),
+        ("favicon.ico", "image/x-icon"),
+        ("favicon.svg", "image/svg+xml"),
+    ):
+        if os.path.exists(os.path.join(app.static_folder, filename)):
+            return send_from_directory(app.static_folder, filename, mimetype=mimetype)
+
+    fallback_svg = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
+<rect width='64' height='64' rx='14' fill='#104CFF'/>
+<circle cx='32' cy='32' r='24' fill='#27C8FF'/>
+<text x='32' y='41' text-anchor='middle' font-size='28' font-family='Arial' fill='white'>B</text>
+</svg>"""
+    return Response(fallback_svg, mimetype="image/svg+xml")
 
 
 @app.get("/health")
@@ -47,6 +62,62 @@ def api_version():
             "entry": "web_app:app",
             "evolution_api_file": getattr(evolution_api, "__file__", "unknown"),
             "evolution_api_key_loaded": bool(getattr(evolution_api, "EVOLUTION_API_KEY", None)),
+        }
+    )
+
+
+@app.get("/api/data-diagnostic")
+def api_data_diagnostic():
+    """Diagnóstico rápido para verificar recarga de muestras en producción."""
+    probes = request.args.getlist("probe")
+    if not probes:
+        probes = ["21961", "I 0704", "C 0704"]
+
+    info_local_before = obtener_info_datos_locales()
+    source_before = obtener_fuente_datos()
+
+    try:
+        df = cargar_datos()
+    except Exception as exc:
+        return jsonify(
+            {
+                "status": "error",
+                "version": APP_VERSION,
+                "source_before": source_before,
+                "data_local": info_local_before,
+                "error": str(exc),
+            }
+        ), 500
+
+    source_after = obtener_fuente_datos()
+    info_local_after = obtener_info_datos_locales()
+
+    if "FECHA_INGRESO" in df.columns:
+        fechas = pd.to_datetime(df["FECHA_INGRESO"], errors="coerce")
+        max_fecha = None if fechas.isna().all() else str(fechas.max())
+    else:
+        max_fecha = None
+
+    probe_result = {}
+    df_texto = df.astype(str)
+    for probe in probes:
+        mask = df_texto.apply(
+            lambda row: row.str.contains(probe, case=False, regex=False, na=False).any(),
+            axis=1,
+        )
+        probe_result[probe] = int(mask.sum())
+
+    return jsonify(
+        {
+            "status": "ok",
+            "version": APP_VERSION,
+            "source_before": source_before,
+            "source_after": source_after,
+            "rows": int(len(df)),
+            "columns": int(len(df.columns)),
+            "max_fecha_ingreso": max_fecha,
+            "probe_matches": probe_result,
+            "data_local": info_local_after,
         }
     )
 
