@@ -1,8 +1,221 @@
-from datos import cargar_datos
+from datos import cargar_datos, obtener_fuente_datos
 from buscador import buscar
 from intenciones import detectar_intencion
 from utilidades import extraer_busqueda
 import pandas as pd
+import os
+import time
+import json
+import re
+
+
+_CACHE_DF = None
+_CACHE_LOADED_AT = 0.0
+_HUMAN_VARIANT_COUNTER = 0
+_QUERY_METRICS = {
+    "total": 0,
+    "no_result": 0,
+    "ambiguous": 0,
+    "last_latency_ms": 0.0,
+    "avg_latency_ms": 0.0,
+    "last_query_ts": 0.0,
+    "cache_hits": 0,
+    "cache_misses": 0,
+}
+
+
+def _append_jsonl(path: str, payload: dict) -> None:
+    try:
+        folder = os.path.dirname(path)
+        if folder:
+            os.makedirs(folder, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, ensure_ascii=True) + "\n")
+    except OSError:
+        pass
+
+
+def _registrar_evento_calidad(consulta: str, busqueda: str, resultado_count: int, meta: dict, latency_ms: float) -> None:
+    global _QUERY_METRICS
+    _QUERY_METRICS["total"] += 1
+    _QUERY_METRICS["last_latency_ms"] = round(latency_ms, 2)
+    _QUERY_METRICS["last_query_ts"] = time.time()
+    prev_avg = float(_QUERY_METRICS["avg_latency_ms"])
+    total = int(_QUERY_METRICS["total"])
+    _QUERY_METRICS["avg_latency_ms"] = round(((prev_avg * (total - 1)) + latency_ms) / max(1, total), 2)
+
+    if resultado_count == 0:
+        _QUERY_METRICS["no_result"] += 1
+    if resultado_count > 8:
+        _QUERY_METRICS["ambiguous"] += 1
+
+    event = {
+        "ts": _QUERY_METRICS["last_query_ts"],
+        "consulta": consulta,
+        "busqueda": busqueda,
+        "resultados": int(resultado_count),
+        "match": (meta or {}).get("match", "unknown"),
+        "match_field": (meta or {}).get("match_field", ""),
+        "latency_ms": round(latency_ms, 2),
+        "data_source": obtener_fuente_datos(),
+    }
+    if resultado_count == 0 or resultado_count > 8:
+        log_path = os.getenv("CHATBOT_METRICS_LOG_PATH", "logs/chat_quality.jsonl").strip() or "logs/chat_quality.jsonl"
+        _append_jsonl(log_path, event)
+
+
+def obtener_metricas_chatbot() -> dict:
+    return {
+        "total_queries": int(_QUERY_METRICS["total"]),
+        "no_result_queries": int(_QUERY_METRICS["no_result"]),
+        "ambiguous_queries": int(_QUERY_METRICS["ambiguous"]),
+        "last_latency_ms": float(_QUERY_METRICS["last_latency_ms"]),
+        "avg_latency_ms": float(_QUERY_METRICS["avg_latency_ms"]),
+        "last_query_ts": float(_QUERY_METRICS["last_query_ts"]),
+        "cache_hits": int(_QUERY_METRICS["cache_hits"]),
+        "cache_misses": int(_QUERY_METRICS["cache_misses"]),
+        "refresh_mode": _obtener_refresh_mode(),
+        "cache_ttl_seconds": _obtener_cache_ttl(),
+    }
+
+
+def _siguiente_indice_plantilla() -> int:
+    global _HUMAN_VARIANT_COUNTER
+    _HUMAN_VARIANT_COUNTER += 1
+    return _HUMAN_VARIANT_COUNTER
+
+
+def _detectar_tono_usuario(consulta: str) -> str:
+    texto = str(consulta or "").strip().lower()
+    if any(k in texto for k in ["porfa", "gracias", "oye", "holi", "q", "k"]):
+        return "cercano"
+    if any(k in texto for k in ["por favor", "cordial", "buen dia", "buenos dias"]):
+        return "formal"
+    return "neutral"
+
+
+def _obtener_tono_respuesta(consulta: str) -> str:
+    configured = os.getenv("CHATBOT_RESPONSE_TONE", "auto").strip().lower()
+    if configured in {"formal", "cercano", "neutral"}:
+        return configured
+    return _detectar_tono_usuario(consulta)
+
+
+def _texto_confirmacion(busqueda: str, intencion: str, tono: str) -> str:
+    if not busqueda:
+        return ""
+
+    campo = {
+        "informe": "informe",
+        "cotizacion": "cotizacion",
+        "referencia": "referencia",
+        "referencia_interna": "referencia interna",
+        "referencia_externa": "referencia externa",
+        "cliente": "cliente",
+        "estado": "estado",
+        "ubicacion": "ubicacion",
+        "marca": "marca",
+        "descripcion": "descripcion",
+        "fecha": "fecha",
+    }.get(intencion, "criterio")
+
+    if tono == "formal":
+        return f"Entendi su consulta. Busque por {campo}: {busqueda}."
+    if tono == "cercano":
+        return f"Listo, busque por {campo}: {busqueda}."
+    return f"Entendi la consulta. Busque por {campo}: {busqueda}."
+
+
+def _texto_apertura(tipo: str, cantidad: int, tono: str) -> str:
+    idx = _siguiente_indice_plantilla()
+    if tipo == "ninguno":
+        opciones_formal = ["No encontre coincidencias por ahora.", "No vi resultados con ese criterio."]
+        opciones_cercano = ["Todavia no me aparece esa coincidencia.", "No la encontre por ahora."]
+        opciones_neutral = ["No encontre coincidencias.", "No aparecen resultados con esa busqueda."]
+    elif tipo == "uno":
+        opciones_formal = ["Ya tengo el resultado.", "Le comparto el resultado encontrado."]
+        opciones_cercano = ["Ya lo tengo.", "Listo, te paso el resultado."]
+        opciones_neutral = ["Encontre 1 coincidencia.", "Tengo 1 resultado para ti."]
+    else:
+        opciones_formal = [f"Encontre {cantidad} coincidencias.", f"Estos son los {cantidad} resultados que encontre."]
+        opciones_cercano = [f"Te salieron {cantidad} coincidencias.", f"Listo, tengo {cantidad} resultados."]
+        opciones_neutral = [f"Encontre {cantidad} coincidencias.", f"Tengo {cantidad} resultados."]
+
+    if tono == "formal":
+        return opciones_formal[idx % len(opciones_formal)]
+    if tono == "cercano":
+        return opciones_cercano[idx % len(opciones_cercano)]
+    return opciones_neutral[idx % len(opciones_neutral)]
+
+
+def _texto_cierre(intencion: str, cantidad: int, tono: str) -> str:
+    if cantidad == 0:
+        if tono == "formal":
+            return "Si desea, puedo intentarlo con informe, cotizacion o referencia exacta."
+        if tono == "cercano":
+            return "Si quieres, lo intentamos por informe, cotizacion o referencia exacta."
+        return "Si quieres, probamos por informe, cotizacion o referencia exacta."
+
+    if cantidad == 1:
+        if tono == "formal":
+            return "Si desea, puedo ampliar el detalle de estado, ubicacion o fecha."
+        if tono == "cercano":
+            return "Si quieres, te saco mas detalle de estado, ubicacion o fecha."
+        return "Si quieres, te doy mas detalle de estado, ubicacion o fecha."
+
+    if intencion in {"informe", "cotizacion", "referencia", "referencia_interna", "referencia_externa"}:
+        return "Si quieres, refinamos por cliente o estado para dejar menos coincidencias."
+    return "Si quieres, refinamos por informe, cotizacion, estado o cliente."
+
+
+def _join_clean(parts: list[str]) -> str:
+    return "\n".join([p for p in parts if p and str(p).strip()])
+
+
+def _list_clean(parts: list[str]) -> list[str]:
+    return [p for p in parts if p and str(p).strip()]
+
+
+def _obtener_refresh_mode() -> str:
+    mode = os.getenv("CHATBOT_DATA_REFRESH_MODE", "strict").strip().lower()
+    return "fast" if mode == "fast" else "strict"
+
+
+def _obtener_cache_ttl() -> float:
+    raw = os.getenv("CHATBOT_DATA_CACHE_TTL_SECONDS", "15").strip()
+    try:
+        ttl = float(raw)
+    except (TypeError, ValueError):
+        return 15.0
+    return max(1.0, ttl)
+
+
+def _obtener_dataframe_consulta():
+    """Obtiene datos con modo estricto o modo rápido (microcaché)."""
+    global _CACHE_DF, _CACHE_LOADED_AT
+
+    mode = _obtener_refresh_mode()
+    now = time.monotonic()
+
+    if mode == "fast" and _CACHE_DF is not None:
+        ttl = _obtener_cache_ttl()
+        if (now - _CACHE_LOADED_AT) <= ttl:
+            _QUERY_METRICS["cache_hits"] += 1
+            return _CACHE_DF
+
+    try:
+        _QUERY_METRICS["cache_misses"] += 1
+        df = cargar_datos()
+    except Exception:
+        # En modo rapido permitimos fallback a cache previa para mantener respuesta.
+        if mode == "fast" and _CACHE_DF is not None:
+            _QUERY_METRICS["cache_hits"] += 1
+            return _CACHE_DF
+        raise
+
+    _CACHE_DF = df
+    _CACHE_LOADED_AT = now
+    return df
 
 
 def _ordenar_primera_muestra(resultado):
@@ -22,7 +235,7 @@ def _ordenar_primera_muestra(resultado):
 
     ordenado = ordenado.sort_values(
         by=['_fecha_orden', '_item_orden'],
-        ascending=[True, True],
+        ascending=[False, False],
         na_position='last',
     )
     return ordenado.drop(columns=['_fecha_orden', '_item_orden'])
@@ -181,7 +394,7 @@ def _formatear_multiples(resultado, intencion: str) -> str:
     total = len(resultado)
     max_items = 8
     recorte = _ordenar_primera_muestra(resultado).head(max_items)
-    bloques = [f"Encontre {total} muestra(s) que coinciden."]
+    bloques = []
     if total > max_items:
         bloques.append(f"Te muestro las {max_items} coincidencias mas relevantes. Si quieres, te ayudo a filtrar por cliente, estado, informe o cotizacion.")
 
@@ -196,7 +409,7 @@ def _formatear_multiples_equipos(resultado) -> list[str]:
     total = len(resultado)
     max_items = 8
     recorte = _ordenar_primera_muestra(resultado).head(max_items)
-    bloques = [f"Encontre {total} equipo(s) que coinciden."]
+    bloques = []
     if total > max_items:
         bloques.append(
             f"Te muestro los {max_items} equipos mas relevantes. Si quieres, te ayudo a filtrar por cliente, estado o marca."
@@ -208,15 +421,39 @@ def _formatear_multiples_equipos(resultado) -> list[str]:
     return bloques
 
 
-def _mensaje_sin_coincidencias() -> str:
-    return "Sin coincidencias locales. Prueba con cliente, referencia o informe."
+def _mensaje_sin_coincidencias(consulta: str = "", busqueda: str = "") -> str:
+    tono = _obtener_tono_respuesta(consulta)
+    consulta_txt = str(consulta or "").strip()
+    busqueda_txt = str(busqueda or "").strip()
+    if tono == "formal":
+        base = "No encontre coincidencias locales por el momento."
+    elif tono == "cercano":
+        base = "Todavia no me aparece esa coincidencia en la base."
+    else:
+        base = "No encontre coincidencias locales por ahora."
+
+    sugerencias = [
+        "1) Prueba solo el informe (ej: I 0704).",
+        "2) Prueba solo la cotizacion (ej: C 0704).",
+        "3) Prueba referencia exacta sin texto extra.",
+    ]
+    if consulta_txt and busqueda_txt and consulta_txt != busqueda_txt:
+        sugerencias.append(f"4) Consulta depurada usada por el bot: {busqueda_txt}")
+
+    return _join_clean([
+        base,
+        "\n".join(sugerencias),
+        _texto_cierre("", 0, tono),
+    ])
 
 
 def responder_consulta(consulta: str) -> str:
+    started_at = time.perf_counter()
     if not consulta or not isinstance(consulta, str):
         return "Hola, escribe tu consulta para buscar muestras."
 
     consulta = consulta.strip()
+    tono = _obtener_tono_respuesta(consulta)
     if consulta.lower() in {"salir", "exit"}:
         return "Hasta luego 👋"
 
@@ -226,40 +463,60 @@ def responder_consulta(consulta: str) -> str:
             "estado, ubicacion, marca, informe o cotizacion."
         )
 
-    # Recarga en cada consulta para reflejar cambios del Excel al instante.
-    df = cargar_datos()
+    # Modo strict: recarga en cada consulta. Modo fast: usa microcache TTL.
+    df = _obtener_dataframe_consulta()
 
     busqueda = extraer_busqueda(consulta)
-    resultado, _meta = buscar(df, busqueda)
+    resultado, meta = buscar(df, busqueda)
+    latency_ms = (time.perf_counter() - started_at) * 1000.0
+    _registrar_evento_calidad(consulta, busqueda, len(resultado), meta, latency_ms)
+    intencion = detectar_intencion(consulta)
+    confirmacion = _texto_confirmacion(busqueda, intencion, tono)
 
     if resultado.empty:
-        return _mensaje_sin_coincidencias()
+        return _join_clean([confirmacion, _mensaje_sin_coincidencias(consulta, busqueda)])
 
-    intencion = detectar_intencion(consulta)
     if len(resultado) > 1:
         if all(_es_registro_equipo(fila) for _, fila in resultado.iterrows()):
-            return _formatear_multiples_equipos(resultado)
-        return _formatear_multiples(resultado, intencion)
+            bloques = _formatear_multiples_equipos(resultado)
+            return _join_clean([
+                _texto_apertura("multi", len(resultado), tono),
+                confirmacion,
+                "\n".join(bloques),
+                _texto_cierre(intencion, len(resultado), tono),
+            ])
+        return _join_clean([
+            _texto_apertura("multi", len(resultado), tono),
+            confirmacion,
+            _formatear_multiples(resultado, intencion),
+            _texto_cierre(intencion, len(resultado), tono),
+        ])
 
     fila = resultado.iloc[0]
 
     if _es_registro_equipo(fila):
-        return (
-            "Encontre 1 equipo que coincide.\n"
-            f"{_resumen_fila_equipo(fila)}"
-        )
+        return _join_clean([
+            _texto_apertura("uno", 1, tono),
+            confirmacion,
+            _resumen_fila_equipo(fila),
+            _texto_cierre(intencion, 1, tono),
+        ])
 
-    return (
-        "Encontre 1 muestra que coincide.\n"
-        f"{_resumen_corto(fila, intencion)}"
-    )
+    return _join_clean([
+        _texto_apertura("uno", 1, tono),
+        confirmacion,
+        _resumen_corto(fila, intencion),
+        _texto_cierre(intencion, 1, tono),
+    ])
 
 
 def responder_consulta_burbujas(consulta: str):
+    started_at = time.perf_counter()
     if not consulta or not isinstance(consulta, str):
         return ["Hola, escribe tu consulta para buscar muestras."]
 
     consulta = consulta.strip()
+    tono = _obtener_tono_respuesta(consulta)
     if consulta.lower() in {"salir", "exit"}:
         return ["Hasta luego 👋"]
 
@@ -268,33 +525,37 @@ def responder_consulta_burbujas(consulta: str):
             "Puedo ayudarte a buscar muestras por cliente, descripcion, referencia, estado, ubicacion, marca, informe o cotizacion."
         ]
 
-    # Recarga en cada consulta para reflejar cambios del Excel al instante.
-    df = cargar_datos()
+    # Modo strict: recarga en cada consulta. Modo fast: usa microcache TTL.
+    df = _obtener_dataframe_consulta()
 
     busqueda = extraer_busqueda(consulta)
-    resultado, _meta = buscar(df, busqueda)
+    resultado, meta = buscar(df, busqueda)
+    latency_ms = (time.perf_counter() - started_at) * 1000.0
+    _registrar_evento_calidad(consulta, busqueda, len(resultado), meta, latency_ms)
+    intencion = detectar_intencion(consulta)
+    confirmacion = _texto_confirmacion(busqueda, intencion, tono)
 
     if resultado.empty:
-        return [_mensaje_sin_coincidencias()]
+        return _list_clean([confirmacion, _mensaje_sin_coincidencias(consulta, busqueda), _texto_cierre("", 0, tono)])
 
-    intencion = detectar_intencion(consulta)
     if len(resultado) > 1:
         if all(_es_registro_equipo(fila) for _, fila in resultado.iterrows()):
             total = len(resultado)
             max_items = 8
             recorte = _ordenar_primera_muestra(resultado).head(max_items)
-            bloques = [f"Encontre {total} equipo(s) que coinciden."]
+            bloques = [_texto_apertura("multi", total, tono), confirmacion]
             if total > max_items:
                 bloques.append(
                     f"Te muestro los {max_items} equipos mas relevantes. Si quieres, te ayudo a filtrar por cliente, estado o marca."
                 )
             for i, (_, fila) in enumerate(recorte.iterrows(), start=1):
                 bloques.append(f"{i}.\n{_resumen_fila_equipo(fila)}")
+            bloques.append(_texto_cierre(intencion, total, tono))
             return bloques
         total = len(resultado)
         max_items = 8
         recorte = _ordenar_primera_muestra(resultado).head(max_items)
-        bloques = [f"Encontre {total} muestra(s) que coinciden."]
+        bloques = [_texto_apertura("multi", total, tono), confirmacion]
         if total > max_items:
             bloques.append(
                 f"Te muestro las {max_items} coincidencias mas relevantes. Si quieres, te ayudo a filtrar por cliente, estado, informe o cotizacion."
@@ -304,10 +565,11 @@ def responder_consulta_burbujas(consulta: str):
                 bloques.append(f"{i}.\n{_resumen_fila(fila)}")
             else:
                 bloques.append(f"{i}.\n{_resumen_muestra_multiple(fila)}")
+        bloques.append(_texto_cierre(intencion, total, tono))
         return bloques
 
     fila = resultado.iloc[0]
     if _es_registro_equipo(fila):
-        return ["Encontre 1 equipo que coincide.", _resumen_fila_equipo(fila)]
+        return _list_clean([_texto_apertura("uno", 1, tono), confirmacion, _resumen_fila_equipo(fila), _texto_cierre(intencion, 1, tono)])
 
-    return ["Encontre 1 muestra que coincide.", _resumen_fila(fila), _campo_por_intencion(fila, intencion)]
+    return _list_clean([_texto_apertura("uno", 1, tono), confirmacion, _resumen_fila(fila), _campo_por_intencion(fila, intencion), _texto_cierre(intencion, 1, tono)])
