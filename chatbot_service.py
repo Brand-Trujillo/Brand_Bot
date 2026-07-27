@@ -536,7 +536,7 @@ def responder_consulta_burbujas(consulta: str):
     confirmacion = _texto_confirmacion(busqueda, intencion, tono)
 
     if resultado.empty:
-        return _list_clean([confirmacion, _mensaje_sin_coincidencias(consulta, busqueda), _texto_cierre("", 0, tono)])
+        return _list_clean([confirmacion, _mensaje_sin_coincidencias(consulta, busqueda)])
 
     if len(resultado) > 1:
         if all(_es_registro_equipo(fila) for _, fila in resultado.iterrows()):
