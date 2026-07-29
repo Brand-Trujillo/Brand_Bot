@@ -2,12 +2,18 @@ import os
 from flask import Flask, jsonify, render_template, request, send_from_directory, Response
 import pandas as pd
 
-from chatbot_service import responder_consulta_burbujas
-from datos import cargar_datos, obtener_fuente_datos, obtener_info_datos_locales
+from chatbot_service import obtener_metricas_chatbot, responder_consulta_burbujas
+from datos import (
+    cargar_datos,
+    obtener_alertas_datos,
+    obtener_fuente_datos,
+    obtener_info_datos_locales,
+    obtener_metricas_datos,
+)
 import evolution_api
 
 app = Flask(__name__)
-APP_VERSION = "20260727e"
+APP_VERSION = "20260729a"
 DEPLOY_COMMIT = os.getenv("RENDER_GIT_COMMIT", "local")
 
 
@@ -21,9 +27,7 @@ def favicon_ico():
     # Compatibilidad robusta: intenta archivos locales y, si faltan,
     # responde un SVG embebido para evitar 404 en producción.
     for filename, mimetype in (
-        ("favicon-v2.ico", "image/x-icon"),
         ("favicon.ico", "image/x-icon"),
-        ("favicon.svg", "image/svg+xml"),
     ):
         if os.path.exists(os.path.join(app.static_folder, filename)):
             return send_from_directory(app.static_folder, filename, mimetype=mimetype)
@@ -38,12 +42,31 @@ def favicon_ico():
 
 @app.get("/health")
 def health():
+    data_metrics = obtener_metricas_datos()
+    chat_metrics = obtener_metricas_chatbot()
     return jsonify(
         {
             "status": "ok",
             "version": APP_VERSION,
             "data_source": obtener_fuente_datos(),
+            "data_last_load_ms": data_metrics.get("last_load_duration_ms"),
+            "data_last_rows": data_metrics.get("last_load_rows"),
+            "chat_last_latency_ms": chat_metrics.get("last_latency_ms"),
             "deploy_commit": DEPLOY_COMMIT,
+        }
+    )
+
+
+@app.get("/api/ops-health")
+def ops_health():
+    return jsonify(
+        {
+            "status": "ok",
+            "version": APP_VERSION,
+            "deploy_commit": DEPLOY_COMMIT,
+            "data": obtener_metricas_datos(),
+            "chat": obtener_metricas_chatbot(),
+            "alerts": obtener_alertas_datos(limit=10),
         }
     )
 

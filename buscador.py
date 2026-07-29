@@ -40,25 +40,53 @@ def _ordenar_por_relevancia(df, tokens, campos_prioritarios=None):
     campos_prioritarios = [c for c in (campos_prioritarios or []) if c in df.columns]
     columnas = [c for c in df.columns if c not in ["ITEM", "ID", "AÑO"]]
 
+    def _solo_digitos(texto: str) -> str:
+        return "".join(ch for ch in str(texto) if ch.isdigit()).lstrip("0") or "0"
+
     def _score_fila(fila):
         score = 0
         for t in tokens:
+            t_norm = str(t).strip().lower()
+            t_digits = _solo_digitos(t_norm)
             for c in columnas:
                 valor = str(fila.get(c, "")).strip().lower()
                 if not valor:
                     continue
 
-                peso_base = 6 if c in campos_prioritarios else 3
-                if valor == t:
-                    score += peso_base + 6
-                elif t in valor:
-                    score += peso_base + 2
+                peso_base = 20 if c in campos_prioritarios else 10
+                if valor == t_norm:
+                    score += peso_base + 120
+                elif valor.startswith(t_norm):
+                    score += peso_base + 70
+                elif t_norm in valor:
+                    score += peso_base + 35
+
+                if t_digits and any(ch.isdigit() for ch in valor):
+                    v_digits = _solo_digitos(valor)
+                    if v_digits == t_digits:
+                        score += peso_base + 95
+                    elif v_digits.startswith(t_digits):
+                        score += peso_base + 45
         return score
 
     ordenado = df.copy()
     ordenado["_score_busqueda"] = ordenado.apply(_score_fila, axis=1)
-    ordenado = ordenado.sort_values(by=["_score_busqueda"], ascending=[False], na_position="last")
-    return ordenado.drop(columns=["_score_busqueda"])
+    if "FECHA_INGRESO" in ordenado.columns:
+        ordenado["_score_fecha"] = ordenado["FECHA_INGRESO"].astype(str)
+    else:
+        ordenado["_score_fecha"] = ""
+
+    if "ITEM" in ordenado.columns:
+        ordenado["_score_item"] = ordenado["ITEM"].astype(str)
+    else:
+        ordenado["_score_item"] = ""
+
+    ordenado = ordenado.sort_values(
+        by=["_score_busqueda", "_score_fecha", "_score_item"],
+        ascending=[False, False, False],
+        na_position="last",
+    )
+    return ordenado.drop(columns=["_score_busqueda", "_score_fecha", "_score_item"])
 
 def limpiar_texto(texto):
     texto = _normalizar_texto(texto)

@@ -2,8 +2,10 @@ import pandas as pd
 import os
 import sys
 import io
+import json
 import sqlite3
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 import unicodedata
@@ -11,18 +13,26 @@ import unicodedata
 # Nombre del archivo de datos (se asume en la misma carpeta que el ejecutable/archivo)
 ARCHIVO = "Control de muestras_2026.xlsx"
 SHEET_NAME = "CONTROL_MUESTRAS_2026"
-DEFAULT_ONEDRIVE_XLSX_URL = (
+DEFAULT_REMOTE_XLSX_URL = (
     "https://docs.google.com/spreadsheets/d/"
     "18IQ-OmkwgfDTUxxfXPOxzcXu-NpAIR2D/edit?usp=drive_link&ouid="
     "116660029921044598774&rtpof=true&sd=true"
 )
-DEFAULT_ONEDRIVE_DB_URL = (
-    "https://ainsp.sharepoint.com/:u:/r/sites/TodoNYCE/nycecolombia/"
-    "Laboratorio/T%C3%A9cnico/7.8%20INFORMES%20DE%20ENSAYO/BASES%20DE%20DATOS%20"
-    "(Informe%20de%20ensayos)/BD_Control_Muestras/lencdb.db?csf=1&web=1&e=SAFRHc"
+
+
+def _env_first(*names: str, default: str = "") -> str:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return default
+DEFAULT_REMOTE_DB_URL = (
+    "https://ainsp.sharepoint.com/:u:/s/TodoNYCE/nycecolombia/"
+    "IQDYcP46FHm-Tqi8DXyQ5PSpAV_sE58gk4BOLVN5_V_v9y4?"
+    "email=brandon.trujillo%40nycecolombia.co&e=4ivaex"
 )
 DEFAULT_LOCAL_DB_PATHS = [
-    # Nueva ruta principal (OneDrive sincronizado) para base de muestras.
+    # Nueva ruta principal sincronizada para base de muestras.
     (
         r"C:\Users\RentAdvisor\OneDrive - QIMA\Todo NYCE\nycecolombia\Laboratorio\Técnico"
         r"\7.8 INFORMES DE ENSAYO\BASES DE DATOS (Informe de ensayos)\BD_Control_Muestras\lencdb.db"
@@ -38,6 +48,167 @@ DEFAULT_LOCAL_DB_PATHS = [
 LAST_DATA_SOURCE = "unknown"
 LAST_MAIN_ERROR = ""
 LAST_EQUIPOS_ERROR = ""
+LAST_LOAD_TS = 0.0
+LAST_LOAD_DURATION_MS = 0.0
+LAST_LOAD_ROWS = 0
+LAST_LOAD_COLUMNS = 0
+LAST_ALERTS = []
+_PREV_SUCCESS_ROWS = 0
+_ALERT_LAST_SENT = {}
+
+
+def _float_env(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _append_jsonl(path: str, payload: dict) -> None:
+    try:
+        folder = os.path.dirname(path)
+        if folder:
+            os.makedirs(folder, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, ensure_ascii=True) + "\n")
+    except OSError:
+        pass
+
+
+def _emit_alert(code: str, message: str, severity: str = "warning", extra: dict | None = None) -> None:
+    global LAST_ALERTS, _ALERT_LAST_SENT
+    cooldown_seconds = _int_env("ALERT_COOLDOWN_SECONDS", 300)
+    now = time.time()
+    last_sent = _ALERT_LAST_SENT.get(code, 0.0)
+    if (now - last_sent) < max(0, cooldown_seconds):
+        return
+    _ALERT_LAST_SENT[code] = now
+
+    alert = {
+        "ts": now,
+        "severity": severity,
+        "code": code,
+        "message": message,
+        "source": LAST_DATA_SOURCE,
+    }
+    if extra:
+        alert["extra"] = extra
+
+    LAST_ALERTS.append(alert)
+    LAST_ALERTS = LAST_ALERTS[-20:]
+
+    log_path = os.getenv("DATOS_ALERT_LOG_PATH", "logs/data_alerts.jsonl").strip() or "logs/data_alerts.jsonl"
+    _append_jsonl(log_path, alert)
+
+    webhook_url = os.getenv("ALERT_WEBHOOK_URL", "").strip()
+    if not webhook_url:
+        return
+
+    try:
+        body = json.dumps(alert, ensure_ascii=True).encode("utf-8")
+        req = urllib.request.Request(
+            webhook_url,
+            data=body,
+            headers={"Content-Type": "application/json", "User-Agent": "BrandBot/1.0"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=8):
+            pass
+    except Exception:
+        pass
+
+
+def _evaluar_alertas_carga(rows: int, source: str) -> None:
+    global _PREV_SUCCESS_ROWS
+
+    if source not in {"google_sheets", "remote_xlsx"}:
+        _emit_alert(
+            code="fallback_source",
+            message=f"Fuente de datos en fallback: {source}",
+            severity="warning",
+            extra={"rows": rows},
+        )
+
+    min_prev_rows = _int_env("ALERT_MIN_PREV_ROWS", 200)
+    min_ratio = _float_env("ALERT_MIN_ROWS_DROP_RATIO", 0.70)
+    min_ratio = min(0.99, max(0.10, min_ratio))
+    if _PREV_SUCCESS_ROWS >= min_prev_rows and rows < int(_PREV_SUCCESS_ROWS * min_ratio):
+        _emit_alert(
+            code="rows_drop",
+            message="Disminucion anomala de filas en la carga de muestras",
+            severity="warning",
+            extra={"previous_rows": _PREV_SUCCESS_ROWS, "current_rows": rows, "ratio": round(rows / max(_PREV_SUCCESS_ROWS, 1), 3)},
+        )
+
+    _PREV_SUCCESS_ROWS = rows
+
+
+def _registrar_carga_exitosa(df: pd.DataFrame, started_at: float) -> pd.DataFrame:
+    global LAST_LOAD_TS, LAST_LOAD_DURATION_MS, LAST_LOAD_ROWS, LAST_LOAD_COLUMNS
+    LAST_LOAD_TS = time.time()
+    LAST_LOAD_DURATION_MS = (time.perf_counter() - started_at) * 1000.0
+    LAST_LOAD_ROWS = int(len(df))
+    LAST_LOAD_COLUMNS = int(len(df.columns)) if hasattr(df, "columns") else 0
+    _evaluar_alertas_carga(LAST_LOAD_ROWS, LAST_DATA_SOURCE)
+    return df
+
+
+def obtener_metricas_datos() -> dict:
+    return {
+        "source": LAST_DATA_SOURCE,
+        "main_error": LAST_MAIN_ERROR,
+        "equipos_error": LAST_EQUIPOS_ERROR,
+        "last_load_ts": LAST_LOAD_TS,
+        "last_load_duration_ms": round(LAST_LOAD_DURATION_MS, 2),
+        "last_load_rows": LAST_LOAD_ROWS,
+        "last_load_columns": LAST_LOAD_COLUMNS,
+    }
+
+
+def obtener_alertas_datos(limit: int = 10) -> list[dict]:
+    return LAST_ALERTS[-max(1, limit):]
+
+
+def _descargar_bytes_con_reintentos(url: str, timeout: int = 45) -> bytes:
+    attempts = max(1, _int_env("DATOS_RETRY_ATTEMPTS", 3))
+    delay_ms = max(0, _int_env("DATOS_RETRY_DELAY_MS", 700))
+    last_exc = None
+
+    for intento in range(1, attempts + 1):
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "*/*",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+            },
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return response.read()
+        except Exception as exc:
+            last_exc = exc
+            if intento < attempts and delay_ms > 0:
+                time.sleep(delay_ms / 1000.0)
+
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("No se pudo descargar el recurso remoto")
 
 
 def obtener_ruta_archivo_equipos() -> str:
@@ -48,12 +219,6 @@ def obtener_ruta_archivo_equipos() -> str:
     custom_path = os.getenv("EQUIPOS_XLSX_PATH", "").strip()
     if custom_path:
         return custom_path
-
-    # Auto-detección local para facilitar uso sin variables de entorno.
-    # Si existe Equipos.xlsx en la raíz del proyecto, se usa como segunda fuente.
-    default_local = _resource_path("Equipos.xlsx")
-    if os.path.exists(default_local):
-        return default_local
     return ""
 
 
@@ -82,14 +247,14 @@ def obtener_url_db() -> str:
     custom_url = os.getenv("DATOS_DB_URL", "").strip()
     if custom_url:
         return custom_url
-    return DEFAULT_ONEDRIVE_DB_URL
+    return DEFAULT_REMOTE_DB_URL
 
 
 def obtener_ruta_archivo_local() -> str:
     """Devuelve la ruta del Excel local usado por la app.
 
     Si existe la variable DATOS_XLSX_PATH se usa esa ruta explícita.
-    Esto permite apuntar al archivo actualizado real (por ejemplo OneDrive sincronizado).
+    Esto permite apuntar al archivo actualizado real (por ejemplo una copia sincronizada).
     """
     custom_path = os.getenv("DATOS_XLSX_PATH", "").strip()
     if custom_path:
@@ -110,8 +275,8 @@ def _resource_path(rel_path: str) -> str:
     return os.path.join(base_path, rel_path)
 
 
-def _onedrive_download_url(url: str) -> str:
-    """Convierte una URL de OneDrive/SharePoint o Google Sheets a descarga directa."""
+def _remote_xlsx_download_url(url: str) -> str:
+    """Convierte una URL compartida o Google Sheets a descarga directa."""
     parsed = urllib.parse.urlparse(url)
     
     # Google Sheets compartido en modo "edit" -> export directo en formato Excel.
@@ -125,13 +290,17 @@ def _onedrive_download_url(url: str) -> str:
 
         if sheet_id:
             query = urllib.parse.parse_qs(parsed.query)
-            gid = (query.get("gid") or ["0"])[0]
-            export_query = urllib.parse.urlencode({"format": "xlsx", "gid": gid})
+            export_params = {"format": "xlsx"}
+            # Importante: no forzar gid=0, porque algunos links compartidos
+            # devuelven HTTP 400 cuando el gid no corresponde a una hoja válida.
+            if query.get("gid"):
+                export_params["gid"] = query["gid"][0]
+            export_query = urllib.parse.urlencode(export_params)
             return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?{export_query}"
 
     query = urllib.parse.parse_qs(parsed.query)
 
-    # Share links de OneDrive/SharePoint suelen aceptar download=1
+    # Enlaces compartidos suelen aceptar download=1
     if "download" not in query:
         query["download"] = ["1"]
 
@@ -141,15 +310,13 @@ def _onedrive_download_url(url: str) -> str:
     )
 
 
-def _cargar_desde_onedrive(url: str, sheet_name: str = "", header: int = 6) -> pd.DataFrame:
-    """Descarga un Excel desde OneDrive y lo carga en memoria.
+def _cargar_xlsx_remoto(url: str, sheet_name: str = "", header: int = 6) -> pd.DataFrame:
+    """Descarga un Excel remoto y lo carga en memoria.
 
     Esto evita problemas de bloqueo cuando el archivo esta abierto localmente.
     Reintenta con diferentes headers/hojas si la primera falla (para soportar variantes de estructura).
     """
-    request = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(request, timeout=45) as response:
-        data = response.read()
+    data = _descargar_bytes_con_reintentos(url, timeout=45)
 
     buffer = io.BytesIO(data)
     
@@ -170,9 +337,16 @@ def _cargar_desde_onedrive(url: str, sheet_name: str = "", header: int = 6) -> p
     buffer.seek(0)
     try:
         xls = pd.ExcelFile(buffer)
-        for sheet_idx, sheet in enumerate(xls.sheet_names):
+        preferred = []
+        if sheet_name and sheet_name in xls.sheet_names:
+            preferred.append(sheet_name)
+        for candidate in xls.sheet_names:
+            if candidate not in preferred:
+                preferred.append(candidate)
+
+        for sheet in preferred:
             try:
-                df = pd.read_excel(buffer, sheet_name=sheet, header=0)
+                df = pd.read_excel(xls, sheet_name=sheet, header=0)
                 if len(df.columns) > 5:  # Validación básica
                     return df
             except Exception:
@@ -227,9 +401,7 @@ def _cargar_desde_sqlite(path: str) -> pd.DataFrame:
 
 def _cargar_desde_sqlite_url(url: str) -> pd.DataFrame:
     """Descarga una base SQLite desde URL y consulta la tabla de muestras."""
-    request = urllib.request.Request(_onedrive_download_url(url), method="GET")
-    with urllib.request.urlopen(request, timeout=45) as response:
-        data = response.read()
+    data = _descargar_bytes_con_reintentos(_remote_xlsx_download_url(url), timeout=45)
 
     temp_path = ""
     try:
@@ -423,7 +595,7 @@ def _normalizar_dataframe(df: pd.DataFrame) -> pd.DataFrame:
             df.loc[mask, "REFERENCIA_INTERNA"] = years[mask] + sufijo
             df.loc[mask, "IDENTIFICACION_INTERNA"] = df.loc[mask, "REFERENCIA_INTERNA"]
 
-            df["TIPO_REGISTRO"] = "muestra"
+    df["TIPO_REGISTRO"] = "muestra"
 
     return df
 
@@ -484,71 +656,47 @@ def cargar_datos():
     global LAST_DATA_SOURCE, LAST_MAIN_ERROR, LAST_EQUIPOS_ERROR
     LAST_MAIN_ERROR = ""
     LAST_EQUIPOS_ERROR = ""
-    db_path = obtener_ruta_db_local()
-    db_url = obtener_url_db()
-    # URL remota principal para muestras en producción (OneDrive o Google Sheets).
-    onedrive_url = os.getenv("ONEDRIVE_XLSX_URL", DEFAULT_ONEDRIVE_XLSX_URL).strip()
-    equipos_onedrive_url = os.getenv("EQUIPOS_ONEDRIVE_XLSX_URL", "").strip()
-    
+    started_at = time.perf_counter()
+    # URL remota principal para muestras en producción.
+    remote_xlsx_url = _env_first("REMOTE_XLSX_URL", "ONEDRIVE_XLSX_URL", default=DEFAULT_REMOTE_XLSX_URL)
+
     df = None  # Inicializar para evitar NameError
 
-    # Prioridad 1: Base SQLite local (desarrollo/laboratorio con acceso a red interna)
-    if db_path:
+    # Prioridad 1: Google Sheets remoto (fuente principal)
+    if remote_xlsx_url:
         try:
-            df = _cargar_desde_sqlite(db_path)
-            df = _normalizar_dataframe_sqlite(df)
-            LAST_DATA_SOURCE = "sqlite"
-            return _post_procesar_datos(df)
-        except Exception as exc:
-            LAST_MAIN_ERROR = f"sqlite_main_error: {exc}"
-
-    # Prioridad 2: Google Sheets / OneDrive remoto (producción con acceso a URLs públicas)
-    if onedrive_url:
-        try:
-            # Para Google Sheets: no forzar SHEET_NAME específico, dejar que autodetecte
-            # Para OneDrive: intentar con SHEET_NAME primero, luego autodetectar
-            df = _cargar_desde_onedrive(_onedrive_download_url(onedrive_url), sheet_name="", header=6)
-            LAST_DATA_SOURCE = "onedrive"
-            if LAST_DATA_SOURCE not in {"sqlite", "sqlite_url"}:
-                df = _normalizar_dataframe(df)
-            return _post_procesar_datos(df)
-        except Exception as exc:
-            LAST_MAIN_ERROR = f"onedrive_main_error: {exc}"
-
-    # Prioridad 3: Base SQLite remota (fallback cuando URLs públicas no disponibles)
-    if db_url:
-        try:
-            df = _cargar_desde_sqlite_url(db_url)
-            df = _normalizar_dataframe_sqlite(df)
-            LAST_DATA_SOURCE = "sqlite_url"
-            return _post_procesar_datos(df)
-        except Exception as exc:
-            LAST_MAIN_ERROR = f"sqlite_url_main_error: {exc}"
-
-    # Prioridad 4: Excel local (último fallback cuando todo falla)
-    try:
-        archivo_path = obtener_ruta_archivo_local()
-        df = _leer_excel_local(archivo_path, sheet_name=SHEET_NAME, header=6)
-        LAST_DATA_SOURCE = "local_fallback" if LAST_MAIN_ERROR else "local"
-        if LAST_DATA_SOURCE not in {"sqlite", "sqlite_url"}:
+            # Para Google Sheets: no forzar SHEET_NAME específico, dejar que autodetecte.
+            # Si falla con la hoja esperada, el lector interno ya prueba alternativas.
+            df = _cargar_xlsx_remoto(
+                _remote_xlsx_download_url(remote_xlsx_url),
+                sheet_name=SHEET_NAME,
+                header=6,
+            )
+            LAST_DATA_SOURCE = "google_sheets"
             df = _normalizar_dataframe(df)
-        return _post_procesar_datos(df)
-    except Exception as exc:
-        LAST_MAIN_ERROR = f"local_fallback_error: {exc}"
-        raise
+            return _registrar_carga_exitosa(_post_procesar_datos(df), started_at)
+        except Exception as exc:
+            LAST_MAIN_ERROR = f"remote_xlsx_main_error: {exc}"
+    _emit_alert(
+        code="all_sources_failed",
+        message="Fallo la carga de datos desde la fuente principal",
+        severity="error",
+        extra={"error": LAST_MAIN_ERROR or "remote_xlsx_not_available"},
+    )
+    raise RuntimeError(LAST_MAIN_ERROR or "No se pudo cargar la fuente principal")
 
 
 def _post_procesar_datos(df: pd.DataFrame) -> pd.DataFrame:
     """Aplica procesamiento adicional (equipos) tras cargar datos principales."""
     global LAST_DATA_SOURCE, LAST_EQUIPOS_ERROR
-    equipos_onedrive_url = os.getenv("EQUIPOS_ONEDRIVE_XLSX_URL", "").strip()
+    equipos_remoto_url = _env_first("EQUIPOS_REMOTE_XLSX_URL", "EQUIPOS_ONEDRIVE_XLSX_URL")
 
     # Carga opcional de un segundo Excel (control de equipos) y lo une al dataset principal.
-    if equipos_onedrive_url:
+    if equipos_remoto_url:
         try:
             equipos_sheet = os.getenv("EQUIPOS_SHEET_NAME", SHEET_NAME).strip()
-            equipos_buffer = _cargar_desde_onedrive(
-                _onedrive_download_url(equipos_onedrive_url),
+            equipos_buffer = _cargar_xlsx_remoto(
+                _remote_xlsx_download_url(equipos_remoto_url),
                 sheet_name=equipos_sheet,
                 header=0,
             )
@@ -611,33 +759,10 @@ def _post_procesar_datos(df: pd.DataFrame) -> pd.DataFrame:
             df_equipos["FECHA_INGRESO"] = df_equipos.get("FECHA_INGRESO", pd.NA)
             df_equipos["TIPO_REGISTRO"] = "equipo"
             df = pd.concat([df, df_equipos], ignore_index=True, sort=False)
-            LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive"
+            LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_remoto"
         except Exception as exc:
-            LAST_EQUIPOS_ERROR = f"equipos_onedrive_error: {exc}"
-            # Fallback robusto: si OneDrive falla (403/timeout), usamos el Excel local.
-            equipos_path = obtener_ruta_archivo_equipos()
-            if equipos_path:
-                try:
-                    equipos_sheet = os.getenv("EQUIPOS_SHEET_NAME", SHEET_NAME).strip()
-                    df_equipos = _normalizar_dataframe_equipos(equipos_path, sheet_name=equipos_sheet)
-                    df = pd.concat([df, df_equipos], ignore_index=True, sort=False)
-                    LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive_error+equipos_local_fallback"
-                except Exception as local_exc:
-                    LAST_EQUIPOS_ERROR = f"{LAST_EQUIPOS_ERROR} | equipos_local_fallback_error: {local_exc}"
-                    LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive_error+equipos_local_fallback_error"
-            else:
-                LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_onedrive_error"
-    else:
-        equipos_path = obtener_ruta_archivo_equipos()
-        if equipos_path:
-            try:
-                equipos_sheet = os.getenv("EQUIPOS_SHEET_NAME", SHEET_NAME).strip()
-                df_equipos = _normalizar_dataframe_equipos(equipos_path, sheet_name=equipos_sheet)
-                df = pd.concat([df, df_equipos], ignore_index=True, sort=False)
-                LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos"
-            except Exception as exc:
-                LAST_EQUIPOS_ERROR = f"equipos_local_error: {exc}"
-                LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_error"
+            LAST_EQUIPOS_ERROR = f"equipos_remoto_error: {exc}"
+            LAST_DATA_SOURCE = f"{LAST_DATA_SOURCE}+equipos_remoto_error"
 
     return df
 

@@ -3,6 +3,7 @@ __pycache__/
 *.pyo
 *.pyd
 *.log
+logs/*.jsonl
 .env
 .vscode/
 ~$*.xlsx

@@ -23,8 +23,9 @@ body {
     linear-gradient(140deg, var(--bg-deep), var(--bg-mid));
   overflow-x: hidden;
   overflow-y: auto;
-  display: grid;
-  place-items: center;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
 }
 
 .bg-shape {
@@ -55,8 +56,9 @@ body {
   position: relative;
   z-index: 1;
   width: min(980px, calc(100vw - 24px));
-  min-height: calc(100vh - 20px);
+  min-height: 100vh;
   padding: 10px 8px;
+  display: flex;
 }
 
 .chat-shell {
@@ -66,8 +68,9 @@ body {
   border: 1px solid var(--border);
   border-radius: 18px;
   backdrop-filter: blur(12px);
-  min-height: min(90vh, 820px);
-  max-height: 90vh;
+  min-height: calc(100vh - 20px);
+  max-height: calc(100vh - 20px);
+  width: 100%;
   box-shadow: 0 24px 70px #00000066;
   overflow: hidden;
 }
@@ -124,6 +127,7 @@ body {
   padding: 14px;
   overflow-y: auto;
   min-height: 0;
+  padding-bottom: 92px;
   display: grid;
   gap: 10px;
 }
@@ -168,6 +172,14 @@ body {
   padding: 12px 14px 14px;
   border-top: 1px solid var(--border);
   background: var(--surface-strong);
+  position: fixed;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: min(980px, calc(100vw - 24px));
+  z-index: 20;
+  border-radius: 0 0 18px 18px;
+  box-shadow: 0 -14px 30px #00000055;
 }
 
 input[type="text"] {
@@ -219,16 +231,26 @@ button:disabled {
 }
 
 @media (max-width: 680px) {
+  .chat-feed {
+    padding-bottom: 104px;
+  }
+
   .layout {
     width: calc(100vw - 10px);
-    min-height: calc(100vh - 10px);
+    min-height: 100vh;
     padding: 0;
   }
 
   .chat-shell {
     border-radius: 10px;
-    min-height: calc(100vh - 10px);
+    min-height: 100vh;
     max-height: none;
+  }
+
+  .chat-form {
+    width: calc(100vw - 10px);
+    bottom: 5px;
+    border-radius: 0 0 10px 10px;
   }
 
   .chat-feed {

@@ -30,7 +30,7 @@ async function initBackendVersionBadge() {
   backendVersionEl.classList.add('version-badge--error');
 }
 
-function addBubble(role, text) {
+function addBubble(role, text, shouldScroll = true) {
   const article = document.createElement('article');
   article.className = `bubble ${role}`;
 
@@ -43,17 +43,20 @@ function addBubble(role, text) {
   article.appendChild(title);
   article.appendChild(p);
   chat.appendChild(article);
-  chat.scrollTop = chat.scrollHeight;
+  if (shouldScroll) {
+    chat.scrollTop = chat.scrollHeight;
+  }
+  return article;
 }
 
-function addBotReplyAsBubbles(reply) {
+function addBotReplyAsBubbles(reply, shouldScroll = true) {
   const text = String(reply || '').trim();
   if (!text) return;
   const normalized = text.replace(
     'Evolution API no está configurada. Define la variable de entorno EVOLUTION_API_KEY y revisa EVOLUTION_API_URL.',
     'No encontré esa muestra ahora. Prueba con cliente, referencia o informe y te ayudo al instante.'
   );
-  addBubble('bot', normalized);
+  return addBubble('bot', normalized, shouldScroll);
 }
 
 async function sendMessage(message) {
@@ -89,7 +92,18 @@ form.addEventListener('submit', async (event) => {
   try {
     const result = await sendMessage(message);
     if (Array.isArray(result.replies) && result.replies.length > 0) {
-      result.replies.forEach((item) => addBotReplyAsBubbles(item));
+      let firstReplyBubble = null;
+      result.replies.forEach((item) => {
+        const bubble = addBotReplyAsBubbles(item, false);
+        if (!firstReplyBubble && bubble) {
+          firstReplyBubble = bubble;
+        }
+      });
+      if (firstReplyBubble) {
+        requestAnimationFrame(() => {
+          firstReplyBubble.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        });
+      }
     } else {
       // Fallback minimo para compatibilidad.
       addBotReplyAsBubbles(result.reply);

@@ -119,27 +119,30 @@ def _texto_confirmacion(busqueda: str, intencion: str, tono: str) -> str:
         "fecha": "fecha",
     }.get(intencion, "criterio")
 
-    if tono == "formal":
-        return f"Entendi su consulta. Busque por {campo}: {busqueda}."
+    if intencion in {"criterio", "todo"} and re.fullmatch(r"[\d\s\-_/]+", busqueda):
+        if tono == "cercano":
+            return f"Voy por {busqueda}."
+        return f"Voy a buscar {busqueda}."
+
     if tono == "cercano":
-        return f"Listo, busque por {campo}: {busqueda}."
-    return f"Entendi la consulta. Busque por {campo}: {busqueda}."
+        return f"Voy por {campo}: {busqueda}."
+    return f"Voy a buscar por {campo}: {busqueda}."
 
 
 def _texto_apertura(tipo: str, cantidad: int, tono: str) -> str:
     idx = _siguiente_indice_plantilla()
     if tipo == "ninguno":
-        opciones_formal = ["No encontre coincidencias por ahora.", "No vi resultados con ese criterio."]
-        opciones_cercano = ["Todavia no me aparece esa coincidencia.", "No la encontre por ahora."]
-        opciones_neutral = ["No encontre coincidencias.", "No aparecen resultados con esa busqueda."]
+        opciones_formal = ["No encontré coincidencias.", "No vi resultados con ese criterio."]
+        opciones_cercano = ["Todavía no me aparece esa coincidencia.", "No la encontré por ahora."]
+        opciones_neutral = ["No encontré coincidencias.", "No aparecen resultados con esa búsqueda."]
     elif tipo == "uno":
         opciones_formal = ["Ya tengo el resultado.", "Le comparto el resultado encontrado."]
         opciones_cercano = ["Ya lo tengo.", "Listo, te paso el resultado."]
-        opciones_neutral = ["Encontre 1 coincidencia.", "Tengo 1 resultado para ti."]
+        opciones_neutral = ["Encontré 1 coincidencia.", "Tengo 1 resultado para ti."]
     else:
-        opciones_formal = [f"Encontre {cantidad} coincidencias.", f"Estos son los {cantidad} resultados que encontre."]
-        opciones_cercano = [f"Te salieron {cantidad} coincidencias.", f"Listo, tengo {cantidad} resultados."]
-        opciones_neutral = [f"Encontre {cantidad} coincidencias.", f"Tengo {cantidad} resultados."]
+        opciones_formal = [f"Encontré {cantidad} coincidencias.", f"Hay {cantidad} resultados para usted."]
+        opciones_cercano = [f"Te salieron {cantidad} coincidencias.", f"Te encontré {cantidad} resultados."]
+        opciones_neutral = [f"Encontré {cantidad} coincidencias.", f"Tengo {cantidad} resultados."]
 
     if tono == "formal":
         return opciones_formal[idx % len(opciones_formal)]
@@ -151,21 +154,17 @@ def _texto_apertura(tipo: str, cantidad: int, tono: str) -> str:
 def _texto_cierre(intencion: str, cantidad: int, tono: str) -> str:
     if cantidad == 0:
         if tono == "formal":
-            return "Si desea, puedo intentarlo con informe, cotizacion o referencia exacta."
+            return "Si desea, lo intentamos por informe, cotización o referencia exacta."
         if tono == "cercano":
-            return "Si quieres, lo intentamos por informe, cotizacion o referencia exacta."
-        return "Si quieres, probamos por informe, cotizacion o referencia exacta."
+            return "Si quieres, lo intentamos por informe, cotización o referencia exacta."
+        return "Si quieres, probamos por informe, cotización o referencia exacta."
 
     if cantidad == 1:
-        if tono == "formal":
-            return "Si desea, puedo ampliar el detalle de estado, ubicacion o fecha."
-        if tono == "cercano":
-            return "Si quieres, te saco mas detalle de estado, ubicacion o fecha."
-        return "Si quieres, te doy mas detalle de estado, ubicacion o fecha."
+        return ""
 
     if intencion in {"informe", "cotizacion", "referencia", "referencia_interna", "referencia_externa"}:
-        return "Si quieres, refinamos por cliente o estado para dejar menos coincidencias."
-    return "Si quieres, refinamos por informe, cotizacion, estado o cliente."
+        return "Si quieres, lo afinamos por cliente o estado."
+    return "Si quieres, lo refinamos por informe, cotización, estado o cliente."
 
 
 def _join_clean(parts: list[str]) -> str:
@@ -235,7 +234,7 @@ def _ordenar_primera_muestra(resultado):
 
     ordenado = ordenado.sort_values(
         by=['_fecha_orden', '_item_orden'],
-        ascending=[False, False],
+        ascending=[True, True],
         na_position='last',
     )
     return ordenado.drop(columns=['_fecha_orden', '_item_orden'])
@@ -480,15 +479,15 @@ def responder_consulta(consulta: str) -> str:
         if all(_es_registro_equipo(fila) for _, fila in resultado.iterrows()):
             bloques = _formatear_multiples_equipos(resultado)
             return _join_clean([
+                "\n".join(bloques),
                 _texto_apertura("multi", len(resultado), tono),
                 confirmacion,
-                "\n".join(bloques),
                 _texto_cierre(intencion, len(resultado), tono),
             ])
         return _join_clean([
+            _formatear_multiples(resultado, intencion),
             _texto_apertura("multi", len(resultado), tono),
             confirmacion,
-            _formatear_multiples(resultado, intencion),
             _texto_cierre(intencion, len(resultado), tono),
         ])
 
@@ -543,19 +542,23 @@ def responder_consulta_burbujas(consulta: str):
             total = len(resultado)
             max_items = 8
             recorte = _ordenar_primera_muestra(resultado).head(max_items)
-            bloques = [_texto_apertura("multi", total, tono), confirmacion]
+            bloques = []
             if total > max_items:
                 bloques.append(
                     f"Te muestro los {max_items} equipos mas relevantes. Si quieres, te ayudo a filtrar por cliente, estado o marca."
                 )
             for i, (_, fila) in enumerate(recorte.iterrows(), start=1):
                 bloques.append(f"{i}.\n{_resumen_fila_equipo(fila)}")
-            bloques.append(_texto_cierre(intencion, total, tono))
+            bloques.extend([
+                _texto_apertura("multi", total, tono),
+                confirmacion,
+                _texto_cierre(intencion, total, tono),
+            ])
             return bloques
         total = len(resultado)
         max_items = 8
         recorte = _ordenar_primera_muestra(resultado).head(max_items)
-        bloques = [_texto_apertura("multi", total, tono), confirmacion]
+        bloques = []
         if total > max_items:
             bloques.append(
                 f"Te muestro las {max_items} coincidencias mas relevantes. Si quieres, te ayudo a filtrar por cliente, estado, informe o cotizacion."
@@ -565,11 +568,15 @@ def responder_consulta_burbujas(consulta: str):
                 bloques.append(f"{i}.\n{_resumen_fila(fila)}")
             else:
                 bloques.append(f"{i}.\n{_resumen_muestra_multiple(fila)}")
-        bloques.append(_texto_cierre(intencion, total, tono))
+        bloques.extend([
+            _texto_apertura("multi", total, tono),
+            confirmacion,
+            _texto_cierre(intencion, total, tono),
+        ])
         return bloques
 
     fila = resultado.iloc[0]
     if _es_registro_equipo(fila):
         return _list_clean([_texto_apertura("uno", 1, tono), confirmacion, _resumen_fila_equipo(fila), _texto_cierre(intencion, 1, tono)])
 
-    return _list_clean([_texto_apertura("uno", 1, tono), confirmacion, _resumen_fila(fila), _campo_por_intencion(fila, intencion), _texto_cierre(intencion, 1, tono)])
+    return _list_clean([_texto_apertura("uno", 1, tono), confirmacion, _resumen_fila(fila), _texto_cierre(intencion, 1, tono)])
