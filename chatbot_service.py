@@ -284,17 +284,17 @@ def _es_registro_equipo(fila) -> bool:
 
 def _resumen_fila_equipo(fila) -> str:
     return (
-        f"Equipo: {_valor_texto(fila.get('EQUIPO'))}\n"
-        f"Identificacion interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))}\n"
-        f"Serie: {_valor_texto(fila.get('SERIE'))}\n"
-        f"Marca: {_valor_texto(fila.get('MARCA'))}\n"
-        f"Magnitud: {_valor_texto(fila.get('MAGNITUD'))}\n"
-        f"Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))}\n"
-        f"Ultima calibracion: {_fecha_texto(fila.get('ULTIMA_CALIBRACION'))}\n"
-        f"Calibrado por: {_valor_texto(fila.get('CALIBRADO_POR'))}\n"
-        f"Proxima calibracion: {_fecha_texto(fila.get('PROXIMA_CALIBRACION'))}\n"
-        f"Tiempo de alarma: {_fecha_texto(fila.get('TIEMPO_ALARMA'))}\n"
-        f"Estado de calibracion: {_valor_texto(fila.get('ESTADO_CALIBRACION'))}"
+        f"🧪 Equipo: {_valor_texto(fila.get('EQUIPO'))}\n"
+        f"🆔 Identificacion interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))}\n"
+        f"🔢 Serie: {_valor_texto(fila.get('SERIE'))}\n"
+        f"🏷️ Marca: {_valor_texto(fila.get('MARCA'))}\n"
+        f"📏 Magnitud: {_valor_texto(fila.get('MAGNITUD'))}\n"
+        f"📦 Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))}\n"
+        f"📅 Ultima calibracion: {_fecha_texto(fila.get('ULTIMA_CALIBRACION'))}\n"
+        f"👤 Calibrado por: {_valor_texto(fila.get('CALIBRADO_POR'))}\n"
+        f"🗓️ Proxima calibracion: {_fecha_texto(fila.get('PROXIMA_CALIBRACION'))}\n"
+        f"⏰ Tiempo de alarma: {_fecha_texto(fila.get('TIEMPO_ALARMA'))}\n"
+        f"✅ Estado de calibracion: {_valor_texto(fila.get('ESTADO_CALIBRACION'))}"
     )
 
 
@@ -303,70 +303,70 @@ def _resumen_fila(fila) -> str:
         return _resumen_fila_equipo(fila)
 
     return (
-        f"Cliente: {_valor_texto(fila.get('CLIENTE'))}\n"
-        f"Marca: {_marca_texto(fila)}\n"
-        f"Descripcion: {_valor_texto(fila.get('DESCRIPCION'))}\n"
-        f"Referencia / Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))}\n"
-        f"Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}\n"
-        f"Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))}\n"
-        f"N° muestras: {_valor_texto(fila.get('NUMERO'))}\n"
-        f"Informe: {_valor_texto(fila.get('INFORME'))}\n"
-        f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}"
+        f"👤 Cliente: {_valor_texto(fila.get('CLIENTE'))}\n"
+        f"🏷️ Marca: {_marca_texto(fila)}\n"
+        f"📝 Descripcion: {_valor_texto(fila.get('DESCRIPCION'))}\n"
+        f"📦 Referencia / Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))}\n"
+        f"🔖 Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}\n"
+        f"🆔 Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))}\n"
+        f"🔢 N° muestras: {_valor_texto(fila.get('NUMERO'))}\n"
+        f"📄 Informe: {_valor_texto(fila.get('INFORME'))}\n"
+        f"💰 Cotizacion: {_valor_texto(fila.get('COTIZACION'))}"
     )
 
 
 def _campo_por_intencion(fila, intencion: str) -> str:
     if _es_registro_equipo(fila):
-        return f"Estado de calibracion: {_valor_texto(fila.get('ESTADO_CALIBRACION'))}"
+        return f"✅ Estado de calibracion: {_valor_texto(fila.get('ESTADO_CALIBRACION'))}"
 
     fecha = _fecha_texto(fila.get("FECHA_INGRESO", "N/E"))
 
     if intencion == "ubicacion":
-        return f"Ubicacion: {_valor_texto(fila.get('UBICACION'))}"
+        return f"📍 Ubicacion: {_valor_texto(fila.get('UBICACION'))}"
     if intencion == "estado":
-        return f"Estado: {_valor_texto(fila.get('ESTADO'))}"
+        return f"✅ Estado: {_valor_texto(fila.get('ESTADO'))}"
     if intencion == "fecha":
-        return f"Fecha ingreso: {fecha}"
+        return f"📅 Fecha ingreso: {fecha}"
     if intencion == "cliente":
-        return f"Cliente: {_valor_texto(fila.get('CLIENTE'))}"
+        return f"👤 Cliente: {_valor_texto(fila.get('CLIENTE'))}"
     if intencion == "descripcion":
-        return f"Descripcion: {_valor_texto(fila.get('DESCRIPCION'))}"
+        return f"📝 Descripcion: {_valor_texto(fila.get('DESCRIPCION'))}"
     if intencion == "referencia":
-        return f"Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}"
+        return f"🔖 Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}"
     if intencion == "referencia_interna":
-        return f"Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))}"
+        return f"🆔 Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))}"
     if intencion == "referencia_externa":
-        return f"Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}"
+        return f"🔖 Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}"
     if intencion == "marca":
-        return f"Marca: {_valor_texto(fila.get('MARCA'))}"
+        return f"🏷️ Marca: {_valor_texto(fila.get('MARCA'))}"
     if intencion == "informe":
-        return f"Informe: {_valor_texto(fila.get('INFORME'))}"
+        return f"📄 Informe: {_valor_texto(fila.get('INFORME'))}"
     if intencion == "cotizacion":
-        return f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}"
+        return f"💰 Cotizacion: {_valor_texto(fila.get('COTIZACION'))}"
 
     return (
-        f"Estado: {_valor_texto(fila.get('ESTADO'))} | "
-        f"Ubicacion: {_valor_texto(fila.get('UBICACION'))} | "
-        f"Fecha ingreso: {fecha}"
+        f"✅ Estado: {_valor_texto(fila.get('ESTADO'))} | "
+        f"📍 Ubicacion: {_valor_texto(fila.get('UBICACION'))} | "
+        f"📅 Fecha ingreso: {fecha}"
     )
 
 
 def _resumen_corto(fila, intencion: str) -> str:
     if _es_registro_equipo(fila):
         return (
-            f"Equipo: {_valor_texto(fila.get('EQUIPO'))} | "
-            f"Id interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))} | "
-            f"Serie: {_valor_texto(fila.get('SERIE'))}\n"
-            f"Marca: {_valor_texto(fila.get('MARCA'))} | Magnitud: {_valor_texto(fila.get('MAGNITUD'))} | "
-            f"Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))} | "
-            f"Estado calibracion: {_valor_texto(fila.get('ESTADO_CALIBRACION'))}"
+            f"🧪 Equipo: {_valor_texto(fila.get('EQUIPO'))} | "
+            f"🆔 Id interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))} | "
+            f"🔢 Serie: {_valor_texto(fila.get('SERIE'))}\n"
+            f"🏷️ Marca: {_valor_texto(fila.get('MARCA'))} | 📏 Magnitud: {_valor_texto(fila.get('MAGNITUD'))} | "
+            f"📦 Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))} | "
+            f"✅ Estado calibracion: {_valor_texto(fila.get('ESTADO_CALIBRACION'))}"
         )
 
     return (
-        f"Cliente: {_valor_texto(fila.get('CLIENTE'))} | "
-        f"Ref. interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))} | "
-        f"Informe: {_valor_texto(fila.get('INFORME'))} | "
-        f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
+        f"👤 Cliente: {_valor_texto(fila.get('CLIENTE'))} | "
+        f"🆔 Ref. interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))} | "
+        f"📄 Informe: {_valor_texto(fila.get('INFORME'))} | "
+        f"💰 Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
         f"{_campo_por_intencion(fila, intencion)}"
     )
 
@@ -374,18 +374,18 @@ def _resumen_corto(fila, intencion: str) -> str:
 def _resumen_muestra_multiple(fila) -> str:
     fecha = _fecha_texto(fila.get("FECHA_INGRESO", "N/E"))
     return (
-        f"Cliente: {_valor_texto(fila.get('CLIENTE'))}\n"
-        f"Marca: {_marca_texto(fila)}\n"
-        f"Descripcion: {_valor_texto(fila.get('DESCRIPCION'))}\n"
-        f"Referencia / Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))}\n"
-        f"Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}\n"
-        f"Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))}\n"
-        f"N° muestras: {_valor_texto(fila.get('NUMERO'))}\n"
-        f"Informe: {_valor_texto(fila.get('INFORME'))}\n"
-        f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
-        f"Estado: {_valor_texto(fila.get('ESTADO'))}\n"
-        f"Ubicacion: {_valor_texto(fila.get('UBICACION'))}\n"
-        f"Fecha recepcion: {fecha}"
+        f"👤 Cliente: {_valor_texto(fila.get('CLIENTE'))}\n"
+        f"🏷️ Marca: {_marca_texto(fila)}\n"
+        f"📝 Descripcion: {_valor_texto(fila.get('DESCRIPCION'))}\n"
+        f"📦 Referencia / Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))}\n"
+        f"🔖 Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}\n"
+        f"🆔 Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))}\n"
+        f"🔢 N° muestras: {_valor_texto(fila.get('NUMERO'))}\n"
+        f"📄 Informe: {_valor_texto(fila.get('INFORME'))}\n"
+        f"💰 Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
+        f"✅ Estado: {_valor_texto(fila.get('ESTADO'))}\n"
+        f"📍 Ubicacion: {_valor_texto(fila.get('UBICACION'))}\n"
+        f"📅 Fecha recepcion: {fecha}"
     )
 
 
