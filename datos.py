@@ -9,6 +9,8 @@ import time
 import urllib.parse
 import urllib.request
 import unicodedata
+import re
+import html
 
 # Nombre del archivo de datos (se asume en la misma carpeta que el ejecutable/archivo)
 ARCHIVO = "Control de muestras_2026.xlsx"
@@ -200,7 +202,15 @@ def _descargar_bytes_con_reintentos(url: str, timeout: int = 45) -> bytes:
         )
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
-                return response.read()
+                data = response.read()
+                resolved_url = response.geturl()
+                content_type = (response.headers.get("Content-Type") or "").lower()
+
+                follow_up = _drive_followup_download_url(data, resolved_url, content_type)
+                if follow_up and follow_up not in {url, resolved_url}:
+                    return _descargar_bytes_con_reintentos(follow_up, timeout=timeout)
+
+                return data
         except Exception as exc:
             last_exc = exc
             if intento < attempts and delay_ms > 0:
@@ -209,6 +219,45 @@ def _descargar_bytes_con_reintentos(url: str, timeout: int = 45) -> bytes:
     if last_exc is not None:
         raise last_exc
     raise RuntimeError("No se pudo descargar el recurso remoto")
+
+
+def _drive_followup_download_url(data: bytes, resolved_url: str, content_type: str) -> str:
+    """Detecta respuestas HTML intermedias de Google Drive y extrae URL de descarga real."""
+    if not data:
+        return ""
+
+    parsed = urllib.parse.urlparse(resolved_url)
+    host = parsed.netloc.lower()
+    if "drive.google.com" not in host and "drive.usercontent.google.com" not in host:
+        return ""
+
+    sample = data[:2048].lstrip().lower()
+    looks_html = (
+        "text/html" in content_type
+        or sample.startswith(b"<!doctype html")
+        or sample.startswith(b"<html")
+        or b"<html" in sample
+    )
+    if not looks_html:
+        return ""
+
+    text = data.decode("utf-8", errors="ignore")
+
+    # Caso típico: link de confirmación en HTML con href="/uc?export=download..."
+    href_match = re.search(r'href="([^"]*?/uc\?export=download[^"]*)"', text)
+    if href_match:
+        href = html.unescape(href_match.group(1))
+        return urllib.parse.urljoin("https://drive.google.com", href)
+
+    # Fallback: algunos flujos incluyen parámetros en campos ocultos.
+    id_match = re.search(r'name="id"\s+value="([^"]+)"', text)
+    confirm_match = re.search(r'name="confirm"\s+value="([^"]+)"', text)
+    if id_match and confirm_match:
+        file_id = urllib.parse.quote(id_match.group(1))
+        confirm = urllib.parse.quote(confirm_match.group(1))
+        return f"https://drive.google.com/uc?export=download&id={file_id}&confirm={confirm}"
+
+    return ""
 
 
 def obtener_ruta_archivo_equipos() -> str:
