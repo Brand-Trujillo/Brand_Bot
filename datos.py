@@ -134,7 +134,7 @@ def _emit_alert(code: str, message: str, severity: str = "warning", extra: dict 
 def _evaluar_alertas_carga(rows: int, source: str) -> None:
     global _PREV_SUCCESS_ROWS
 
-    if source not in {"google_sheets", "remote_xlsx"}:
+    if source not in {"google_sheets", "remote_xlsx", "google_drive_sqlite"}:
         _emit_alert(
             code="fallback_source",
             message=f"Fuente de datos en fallback: {source}",
@@ -298,6 +298,18 @@ def _remote_xlsx_download_url(url: str) -> str:
             export_query = urllib.parse.urlencode(export_params)
             return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?{export_query}"
 
+    # Google Drive file compartido -> descarga directa del archivo binario.
+    # Ejemplo: /file/d/<id>/view?...  =>  /uc?export=download&id=<id>
+    if "drive.google.com" in parsed.netloc and "/file/d/" in parsed.path:
+        parts = [p for p in parsed.path.split("/") if p]
+        file_id = ""
+        if "d" in parts:
+            idx = parts.index("d")
+            if idx + 1 < len(parts):
+                file_id = parts[idx + 1]
+        if file_id:
+            return f"https://drive.google.com/uc?export=download&id={urllib.parse.quote(file_id)}"
+
     query = urllib.parse.parse_qs(parsed.query)
 
     # Enlaces compartidos suelen aceptar download=1
@@ -310,16 +322,28 @@ def _remote_xlsx_download_url(url: str) -> str:
     )
 
 
-def _cargar_xlsx_remoto(url: str, sheet_name: str = "", header: int = 6) -> pd.DataFrame:
-    """Descarga un Excel remoto y lo carga en memoria.
+def _parece_sqlite(data: bytes) -> bool:
+    return bool(data) and data.startswith(b"SQLite format 3\x00")
 
-    Esto evita problemas de bloqueo cuando el archivo esta abierto localmente.
-    Reintenta con diferentes headers/hojas si la primera falla (para soportar variantes de estructura).
-    """
-    data = _descargar_bytes_con_reintentos(url, timeout=45)
 
+def _cargar_sqlite_desde_bytes(data: bytes) -> pd.DataFrame:
+    temp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp:
+            tmp.write(data)
+            temp_path = tmp.name
+        return _cargar_desde_sqlite(temp_path)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+
+def _cargar_xlsx_desde_bytes(data: bytes, sheet_name: str = "", header: int = 6) -> pd.DataFrame:
     buffer = io.BytesIO(data)
-    
+
     # Estrategia 1: Usar sheet_name y header especificados
     try:
         df = pd.read_excel(
@@ -356,8 +380,17 @@ def _cargar_xlsx_remoto(url: str, sheet_name: str = "", header: int = 6) -> pd.D
 
     # Estrategia 3: Sin header, dejar que el usuario sepa que es un fallback
     buffer.seek(0)
-    df = pd.read_excel(buffer, sheet_name=sheet_name or 0, header=None)
-    return df
+    return pd.read_excel(buffer, sheet_name=sheet_name or 0, header=None)
+
+
+def _cargar_xlsx_remoto(url: str, sheet_name: str = "", header: int = 6) -> pd.DataFrame:
+    """Descarga un Excel remoto y lo carga en memoria.
+
+    Esto evita problemas de bloqueo cuando el archivo esta abierto localmente.
+    Reintenta con diferentes headers/hojas si la primera falla (para soportar variantes de estructura).
+    """
+    data = _descargar_bytes_con_reintentos(url, timeout=45)
+    return _cargar_xlsx_desde_bytes(data, sheet_name=sheet_name, header=header)
 
 
 def _leer_excel_local(path: str, sheet_name: str = "", header: int = 6) -> pd.DataFrame:
@@ -665,13 +698,18 @@ def cargar_datos():
     # Prioridad 1: Google Sheets remoto (fuente principal)
     if remote_xlsx_url:
         try:
+            remote_download_url = _remote_xlsx_download_url(remote_xlsx_url)
+            remote_data = _descargar_bytes_con_reintentos(remote_download_url, timeout=45)
+
+            if _parece_sqlite(remote_data):
+                df = _cargar_sqlite_desde_bytes(remote_data)
+                LAST_DATA_SOURCE = "google_drive_sqlite"
+                df = _normalizar_dataframe_sqlite(df)
+                return _registrar_carga_exitosa(_post_procesar_datos(df), started_at)
+
             # Para Google Sheets: no forzar SHEET_NAME específico, dejar que autodetecte.
             # Si falla con la hoja esperada, el lector interno ya prueba alternativas.
-            df = _cargar_xlsx_remoto(
-                _remote_xlsx_download_url(remote_xlsx_url),
-                sheet_name=SHEET_NAME,
-                header=6,
-            )
+            df = _cargar_xlsx_desde_bytes(remote_data, sheet_name=SHEET_NAME, header=6)
             LAST_DATA_SOURCE = "google_sheets"
             df = _normalizar_dataframe(df)
             return _registrar_carga_exitosa(_post_procesar_datos(df), started_at)
