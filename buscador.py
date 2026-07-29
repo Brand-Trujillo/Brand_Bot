@@ -138,12 +138,20 @@ def buscar(df, texto):
             otros_tokens.append(t)
 
     # Separar tokens numéricos de los textuales.
-    # Toleramos confusión común O->0 (ej. O243) para búsquedas de informe/cotización.
+    # Toleramos confusión común O->0 y prefijos pegados (ej. O243, IO243, CO215).
     numeric_tokens = []
     text_tokens = []
     for t in otros_tokens:
         if t.isdigit():
             numeric_tokens.append(t)
+            continue
+        m_pref_num = re.fullmatch(r"[ic]0*(\d+)", t)
+        if m_pref_num:
+            numeric_tokens.append(m_pref_num.group(1))
+            continue
+        m_pref_o_num = re.fullmatch(r"[ic]o0*(\d+)", t)
+        if m_pref_o_num:
+            numeric_tokens.append(m_pref_o_num.group(1))
             continue
         m_o_pref = re.fullmatch(r"o0*(\d+)", t)
         if m_o_pref:
