@@ -137,9 +137,19 @@ def buscar(df, texto):
         else:
             otros_tokens.append(t)
 
-    # Separar tokens numéricos (números de muestra) de los tokens textuales
-    numeric_tokens = [t for t in otros_tokens if t.isdigit()]
-    text_tokens = [t for t in otros_tokens if not t.isdigit()]
+    # Separar tokens numéricos de los textuales.
+    # Toleramos confusión común O->0 (ej. O243) para búsquedas de informe/cotización.
+    numeric_tokens = []
+    text_tokens = []
+    for t in otros_tokens:
+        if t.isdigit():
+            numeric_tokens.append(t)
+            continue
+        m_o_pref = re.fullmatch(r"o0*(\d+)", t)
+        if m_o_pref:
+            numeric_tokens.append(m_o_pref.group(1))
+            continue
+        text_tokens.append(t)
 
     # Si no quedaron tokens útiles, evitamos devolver todo el dataset por defecto.
     if not numeric_tokens and not text_tokens and not estado_tokens:

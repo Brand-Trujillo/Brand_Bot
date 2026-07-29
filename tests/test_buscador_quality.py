@@ -198,6 +198,11 @@ class TestBuscadorQuality(unittest.TestCase):
         self.assertEqual(len(resultado), 1)
         self.assertEqual(int(resultado.iloc[0]["ITEM"]), 6)
 
+    def test_campo_informe_con_o_en_vez_de_cero(self):
+        resultado, _ = buscar(self.df, "O802")
+        self.assertEqual(len(resultado), 1)
+        self.assertEqual(int(resultado.iloc[0]["ITEM"]), 6)
+
     def test_campo_cotizacion_numerico(self):
         resultado, _ = buscar(self.df, "cotizacion 801")
         self.assertEqual(len(resultado), 1)
