@@ -28,6 +28,8 @@ def _env_first(*names: str, default: str = "") -> str:
         if value:
             return value
     return default
+
+
 DEFAULT_REMOTE_DB_URL = (
     "https://ainsp.sharepoint.com/:u:/s/TodoNYCE/nycecolombia/"
     "IQDYcP46FHm-Tqi8DXyQ5PSpAV_sE58gk4BOLVN5_V_v9y4?"
@@ -789,7 +791,6 @@ def _post_procesar_datos(df: pd.DataFrame) -> pd.DataFrame:
             )
             df_equipos = equipos_buffer.dropna(how="all").reset_index(drop=True)
             df_equipos = df_equipos.rename(columns={col: col for col in df_equipos.columns})
-            temp_path = None
             rename_map = {}
             for col in df_equipos.columns:
                 norm = _texto_normalizado(col)
