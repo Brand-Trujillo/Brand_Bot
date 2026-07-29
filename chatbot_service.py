@@ -176,12 +176,12 @@ def _list_clean(parts: list[str]) -> list[str]:
 
 
 def _obtener_refresh_mode() -> str:
-    mode = os.getenv("CHATBOT_DATA_REFRESH_MODE", "strict").strip().lower()
+    mode = os.getenv("CHATBOT_DATA_REFRESH_MODE", "fast").strip().lower()
     return "fast" if mode == "fast" else "strict"
 
 
 def _obtener_cache_ttl() -> float:
-    raw = os.getenv("CHATBOT_DATA_CACHE_TTL_SECONDS", "15").strip()
+    raw = os.getenv("CHATBOT_DATA_CACHE_TTL_SECONDS", "300").strip()
     try:
         ttl = float(raw)
     except (TypeError, ValueError):
