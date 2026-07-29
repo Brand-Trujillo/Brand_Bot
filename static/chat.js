@@ -66,9 +66,16 @@ async function sendMessage(message) {
     body: JSON.stringify({ message })
   });
 
-  const data = await res.json().catch(() => ({}));
+  const rawText = await res.text();
+  let data = {};
+  try {
+    data = rawText ? JSON.parse(rawText) : {};
+  } catch (_err) {
+    data = {};
+  }
   if (!res.ok || !data.ok) {
-    throw new Error(data.error || 'No se pudo procesar la consulta.');
+    const fallback = rawText && rawText.trim() ? rawText.trim().slice(0, 200) : 'No se pudo procesar la consulta.';
+    throw new Error(data.error || fallback);
   }
   return {
     reply: data.reply,

@@ -147,16 +147,19 @@ def api_data_diagnostic():
 
 @app.post("/api/chat")
 def chat_api():
-    payload = request.get_json(silent=True) or {}
-    consulta = (payload.get("message") or "").strip()
+    try:
+        payload = request.get_json(silent=True) or {}
+        consulta = (payload.get("message") or "").strip()
 
-    if not consulta:
-        return jsonify({"ok": False, "error": "Debes enviar un mensaje."}), 400
+        if not consulta:
+            return jsonify({"ok": False, "error": "Debes enviar un mensaje."}), 400
 
-    replies = responder_consulta_burbujas(consulta)
-    # Compatibilidad: mantenemos 'reply' con el primer bloque o concatenado.
-    reply_text = "\n\n".join(replies) if replies else ""
-    return jsonify({"ok": True, "reply": reply_text, "replies": replies, "version": APP_VERSION})
+        replies = responder_consulta_burbujas(consulta)
+        # Compatibilidad: mantenemos 'reply' con el primer bloque o concatenado.
+        reply_text = "\n\n".join(replies) if replies else ""
+        return jsonify({"ok": True, "reply": reply_text, "replies": replies, "version": APP_VERSION})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": f"Error interno del servidor: {exc}"}), 500
 
 
 @app.after_request
