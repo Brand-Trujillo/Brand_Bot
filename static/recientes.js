@@ -33,10 +33,8 @@ function renderRow(item) {
       <td>${escapeHtml(item.marca || fallback)}</td>
       <td>${escapeHtml(item.referencia_modelo || fallback)}</td>
       <td>${escapeHtml(item.referencia_externa || fallback)}</td>
-      <td>${escapeHtml(item.referencia_interna || fallback)}</td>
       <td>${escapeHtml(item.informe || fallback)}</td>
       <td>${escapeHtml(item.cotizacion || fallback)}</td>
-      <td>${escapeHtml(item.estado || fallback)}</td>
       <td>${escapeHtml(item.numero || fallback)}</td>
     </tr>
   `;
@@ -52,7 +50,7 @@ function renderDays(days) {
     const items = Array.isArray(day.items) ? day.items : [];
     const rowsHtml = items.length > 0
       ? items.map(renderRow).join('')
-      : '<tr><td colspan="11" class="empty-cell">No hay muestras para este dia.</td></tr>';
+      : '<tr><td colspan="9" class="empty-cell">No hay muestras para este dia.</td></tr>';
 
     return `
       <section class="day-block" data-day="${escapeHtml(day.key || '')}">
@@ -70,10 +68,8 @@ function renderDays(days) {
                 <th>Marca</th>
                 <th>Referencia / Modelo</th>
                 <th>Referencia externa</th>
-                <th>Referencia interna</th>
                 <th>Informe</th>
                 <th>Cotizacion</th>
-                <th>Estado</th>
                 <th>N° muestras</th>
               </tr>
             </thead>
