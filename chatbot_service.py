@@ -302,6 +302,8 @@ def _resumen_fila(fila) -> str:
     if _es_registro_equipo(fila):
         return _resumen_fila_equipo(fila)
 
+    fecha = _fecha_texto(fila.get("FECHA_INGRESO", "N/E"))
+
     return (
         f"Cliente: {_valor_texto(fila.get('CLIENTE'))}\n"
         f"Marca: {_marca_texto(fila)}\n"
@@ -311,7 +313,10 @@ def _resumen_fila(fila) -> str:
         f"Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))}\n"
         f"N° muestras: {_valor_texto(fila.get('NUMERO'))}\n"
         f"Informe: {_valor_texto(fila.get('INFORME'))}\n"
-        f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}"
+        f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
+        f"Estado: {_valor_texto(fila.get('ESTADO'))}\n"
+        f"Ubicacion: {_valor_texto(fila.get('UBICACION'))}\n"
+        f"Fecha recepcion: {fecha}"
     )
 
 
