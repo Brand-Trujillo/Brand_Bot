@@ -23,22 +23,22 @@ function renderBadge(version, commit) {
   backendVersionEl.classList.remove('version-badge--error');
 }
 
-function renderCard(item) {
+function renderRow(item) {
   const fallback = 'N/E';
   return `
-    <article class="recent-item">
-      <p><strong>Fecha:</strong> ${escapeHtml(item.fecha || fallback)}</p>
-      <p><strong>Cliente:</strong> ${escapeHtml(item.cliente || fallback)}</p>
-      <p><strong>Descripcion:</strong> ${escapeHtml(item.descripcion || fallback)}</p>
-      <p><strong>Marca:</strong> ${escapeHtml(item.marca || fallback)}</p>
-      <p><strong>Referencia / Modelo:</strong> ${escapeHtml(item.referencia_modelo || fallback)}</p>
-      <p><strong>Referencia externa:</strong> ${escapeHtml(item.referencia_externa || fallback)}</p>
-      <p><strong>Referencia interna:</strong> ${escapeHtml(item.referencia_interna || fallback)}</p>
-      <p><strong>Informe:</strong> ${escapeHtml(item.informe || fallback)}</p>
-      <p><strong>Cotizacion:</strong> ${escapeHtml(item.cotizacion || fallback)}</p>
-      <p><strong>Estado:</strong> ${escapeHtml(item.estado || fallback)}</p>
-      <p><strong>N° muestras:</strong> ${escapeHtml(item.numero || fallback)}</p>
-    </article>
+    <tr>
+      <td>${escapeHtml(item.fecha || fallback)}</td>
+      <td>${escapeHtml(item.cliente || fallback)}</td>
+      <td>${escapeHtml(item.descripcion || fallback)}</td>
+      <td>${escapeHtml(item.marca || fallback)}</td>
+      <td>${escapeHtml(item.referencia_modelo || fallback)}</td>
+      <td>${escapeHtml(item.referencia_externa || fallback)}</td>
+      <td>${escapeHtml(item.referencia_interna || fallback)}</td>
+      <td>${escapeHtml(item.informe || fallback)}</td>
+      <td>${escapeHtml(item.cotizacion || fallback)}</td>
+      <td>${escapeHtml(item.estado || fallback)}</td>
+      <td>${escapeHtml(item.numero || fallback)}</td>
+    </tr>
   `;
 }
 
@@ -50,9 +50,9 @@ function renderDays(days) {
 
   daysEl.innerHTML = days.map((day) => {
     const items = Array.isArray(day.items) ? day.items : [];
-    const itemsHtml = items.length > 0
-      ? items.map(renderCard).join('')
-      : '<p class="empty-state">No hay muestras para este dia.</p>';
+    const rowsHtml = items.length > 0
+      ? items.map(renderRow).join('')
+      : '<tr><td colspan="11" class="empty-cell">No hay muestras para este dia.</td></tr>';
 
     return `
       <section class="day-block" data-day="${escapeHtml(day.key || '')}">
@@ -60,7 +60,26 @@ function renderDays(days) {
           <h2>${escapeHtml(day.label || 'Dia')}</h2>
           <span>${items.length} muestras</span>
         </header>
-        <div class="day-grid">${itemsHtml}</div>
+        <div class="day-table-wrap">
+          <table class="day-table" role="table" aria-label="Muestras recientes de ${escapeHtml(day.label || 'dia')}">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Descripcion</th>
+                <th>Marca</th>
+                <th>Referencia / Modelo</th>
+                <th>Referencia externa</th>
+                <th>Referencia interna</th>
+                <th>Informe</th>
+                <th>Cotizacion</th>
+                <th>Estado</th>
+                <th>N° muestras</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
       </section>
     `;
   }).join('');

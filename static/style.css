@@ -272,27 +272,63 @@ body {
   font-size: 0.8rem;
 }
 
-.day-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
-}
-
-.recent-item {
+.day-table-wrap {
+  overflow-x: auto;
   border: 1px solid #2d415d;
   border-radius: 10px;
-  background: #111c30;
-  padding: 10px;
+  background: #0d1627;
 }
 
-.recent-item p {
-  margin: 0 0 6px;
-  font-size: 0.88rem;
-  line-height: 1.35;
+.day-table {
+  width: 100%;
+  min-width: 1220px;
+  border-collapse: collapse;
+  font-size: 0.84rem;
 }
 
-.recent-item p:last-child {
-  margin-bottom: 0;
+.day-table th,
+.day-table td {
+  padding: 8px 10px;
+  border-right: 1px solid #273a55;
+  border-bottom: 1px solid #273a55;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.day-table th:last-child,
+.day-table td:last-child {
+  border-right: 0;
+}
+
+.day-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, #14304f, #112945);
+  color: #d9edff;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.77rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.day-table tbody tr:nth-child(odd) {
+  background: #0f1b30;
+}
+
+.day-table tbody tr:nth-child(even) {
+  background: #121f36;
+}
+
+.day-table tbody tr:hover {
+  background: #183150;
+}
+
+.empty-cell {
+  color: #9fb0c7;
+  text-align: center;
+  white-space: normal;
 }
 
 .empty-state {
@@ -399,8 +435,8 @@ button:disabled {
     max-height: none;
   }
 
-  .day-grid {
-    grid-template-columns: 1fr;
+  .day-table {
+    min-width: 980px;
   }
 
   button {
