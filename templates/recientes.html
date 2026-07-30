@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Brand Bot | Control de Muestras</title>
+  <title>Brand Bot | Recientes</title>
   <link rel="icon" href="{{ url_for('favicon_ico') }}?v={{ app_version }}">
   <link rel="shortcut icon" href="{{ url_for('favicon_ico') }}?v={{ app_version }}">
   <link rel="apple-touch-icon" href="{{ url_for('favicon_ico') }}?v={{ app_version }}">
@@ -17,36 +17,30 @@
   <div class="bg-shape bg-shape-b"></div>
 
   <main class="layout">
-    <section class="chat-shell" aria-label="Chat del asistente">
-      <header class="brand">
+    <section class="recent-shell" aria-label="Ultimas muestras registradas">
+      <header class="brand recent-header">
         <div class="brand-dot" aria-hidden="true"></div>
         <div>
-          <h1>Brand_Bot</h1>
+          <h1>Recientes</h1>
           <p>
-            Asistente virtual de Brandon.
+            Ultimas muestras registradas (Lunes a Viernes).
             <span id="backend-version" class="version-badge">backend {{ app_version }}</span>
           </p>
         </div>
         <div class="brand-actions">
-          <a class="secondary-btn" href="{{ url_for('recientes') }}">RECIENTES</a>
+          <button id="refresh-btn" type="button" class="secondary-btn">Actualizar</button>
+          <a class="secondary-btn" href="{{ url_for('index') }}">Volver al chat</a>
         </div>
       </header>
 
-      <div id="chat" class="chat-feed" aria-live="polite">
-        <article class="bubble bot">
-          <h2>Asistente</h2>
-          <p>Hola. Tengo conocimiento sobre muestras y equipos del laboratorio. Puedes preguntarme por cliente, referencia, marca, informe, cotización o estado de calibración</p>
-        </article>
-      </div>
+      <section class="recent-toolbar" aria-live="polite">
+        <p id="recent-status">Cargando muestras recientes...</p>
+      </section>
 
-      <form id="chat-form" class="chat-form" autocomplete="off">
-        <label for="message" class="sr-only">Escribe tu pregunta</label>
-        <input id="message" name="message" type="text" placeholder="Ejemplo: Muestra 21692" required>
-        <button id="send-btn" type="submit">Enviar</button>
-      </form>
+      <section id="recent-days" class="recent-days" aria-live="polite"></section>
     </section>
   </main>
 
-  <script src="{{ url_for('static', filename='chat.js') }}?v={{ app_version }}"></script>
+  <script src="{{ url_for('static', filename='recientes.js') }}?v={{ app_version }}"></script>
 </body>
 </html>

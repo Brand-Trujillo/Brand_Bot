@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from flask import Flask, jsonify, render_template, request, send_from_directory, Response
 import pandas as pd
 
@@ -13,13 +14,113 @@ from datos import (
 import evolution_api
 
 app = Flask(__name__)
-APP_VERSION = "20260729a"
+APP_VERSION = "20260730a"
 DEPLOY_COMMIT = os.getenv("RENDER_GIT_COMMIT", "local")
+
+WEEKDAY_LABELS = {
+    0: "Lunes",
+    1: "Martes",
+    2: "Miercoles",
+    3: "Jueves",
+    4: "Viernes",
+}
+
+
+def _value_text(value) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if text.lower() in {"nan", "nat", "none"}:
+        return ""
+    return text
+
+
+def _build_recientes_payload(limit_per_day: int = 20) -> dict:
+    limit_per_day = max(1, min(int(limit_per_day or 20), 100))
+    df = cargar_datos()
+
+    if "TIPO_REGISTRO" in df.columns:
+        tipo = df["TIPO_REGISTRO"].astype(str).str.strip().str.lower()
+        df = df[tipo == "muestra"].copy()
+    else:
+        df = df.copy()
+
+    if "FECHA_INGRESO" not in df.columns:
+        return {
+            "ok": True,
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+            "source": obtener_fuente_datos(),
+            "total_items": 0,
+            "days": [
+                {"key": "lunes", "label": "Lunes", "count": 0, "items": []},
+                {"key": "martes", "label": "Martes", "count": 0, "items": []},
+                {"key": "miercoles", "label": "Miercoles", "count": 0, "items": []},
+                {"key": "jueves", "label": "Jueves", "count": 0, "items": []},
+                {"key": "viernes", "label": "Viernes", "count": 0, "items": []},
+            ],
+        }
+
+    df["_fecha_ingreso"] = pd.to_datetime(df["FECHA_INGRESO"], errors="coerce")
+    df = df[df["_fecha_ingreso"].notna()].copy()
+    df = df[df["_fecha_ingreso"].dt.weekday <= 4].copy()
+
+    if "ITEM" in df.columns:
+        df["_item_sort"] = pd.to_numeric(df["ITEM"], errors="coerce")
+    else:
+        df["_item_sort"] = pd.NA
+
+    df = df.sort_values(by=["_fecha_ingreso", "_item_sort"], ascending=[False, False], na_position="last")
+
+    days = []
+    total_items = 0
+    for weekday in range(0, 5):
+        day_df = df[df["_fecha_ingreso"].dt.weekday == weekday].head(limit_per_day)
+        items = []
+        for _, row in day_df.iterrows():
+            items.append(
+                {
+                    "fecha": row["_fecha_ingreso"].strftime("%Y-%m-%d"),
+                    "cliente": _value_text(row.get("CLIENTE")),
+                    "descripcion": _value_text(row.get("DESCRIPCION")),
+                    "marca": _value_text(row.get("MARCA")),
+                    "referencia_modelo": _value_text(row.get("REFERENCIA_MODELO")),
+                    "referencia_externa": _value_text(row.get("REFERENCIA_EXTERNA")),
+                    "referencia_interna": _value_text(row.get("REFERENCIA_INTERNA")),
+                    "informe": _value_text(row.get("INFORME")),
+                    "cotizacion": _value_text(row.get("COTIZACION")),
+                    "estado": _value_text(row.get("ESTADO")),
+                    "numero": _value_text(row.get("NUMERO")),
+                }
+            )
+
+        total_items += len(items)
+        label = WEEKDAY_LABELS[weekday]
+        days.append(
+            {
+                "key": label.lower(),
+                "label": label,
+                "count": len(items),
+                "items": items,
+            }
+        )
+
+    return {
+        "ok": True,
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+        "source": obtener_fuente_datos(),
+        "total_items": total_items,
+        "days": days,
+    }
 
 
 @app.get("/")
 def index():
     return render_template("index.html", app_version=APP_VERSION)
+
+
+@app.get("/recientes")
+def recientes():
+    return render_template("recientes.html", app_version=APP_VERSION)
 
 
 @app.get("/favicon.ico")
@@ -143,6 +244,18 @@ def api_data_diagnostic():
             "data_local": info_local_after,
         }
     )
+
+
+@app.get("/api/recentes")
+def api_recentes():
+    try:
+        limit = request.args.get("limit", default=20, type=int)
+        payload = _build_recientes_payload(limit_per_day=limit)
+        payload["version"] = APP_VERSION
+        payload["deploy_commit"] = DEPLOY_COMMIT
+        return jsonify(payload)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": f"Error interno del servidor: {exc}", "version": APP_VERSION}), 500
 
 
 @app.post("/api/chat")

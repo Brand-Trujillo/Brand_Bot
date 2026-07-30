@@ -104,6 +104,35 @@ body {
   font-size: 0.92rem;
 }
 
+.brand-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid #3b4f69;
+  background: #0f1a2d;
+  color: #d6e8ff;
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.secondary-btn:hover {
+  border-color: #5c7ca3;
+  background: #13233b;
+}
+
 .version-badge {
   display: inline-block;
   margin-left: 10px;
@@ -182,6 +211,95 @@ body {
   box-shadow: 0 -14px 30px #00000055;
 }
 
+.recent-shell {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  backdrop-filter: blur(12px);
+  min-height: calc(100vh - 20px);
+  max-height: calc(100vh - 20px);
+  width: 100%;
+  box-shadow: 0 24px 70px #00000066;
+  overflow: hidden;
+}
+
+.recent-toolbar {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: #0e1829;
+}
+
+.recent-toolbar p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.recent-days {
+  overflow-y: auto;
+  padding: 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.day-block {
+  border: 1px solid #334155;
+  border-radius: 12px;
+  background: #0f1a2dcf;
+  padding: 10px;
+}
+
+.day-block__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #2a3a52;
+}
+
+.day-block__header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.day-block__header span {
+  font-family: "IBM Plex Mono", monospace;
+  color: #9fd6ff;
+  font-size: 0.8rem;
+}
+
+.day-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.recent-item {
+  border: 1px solid #2d415d;
+  border-radius: 10px;
+  background: #111c30;
+  padding: 10px;
+}
+
+.recent-item p {
+  margin: 0 0 6px;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.recent-item p:last-child {
+  margin-bottom: 0;
+}
+
+.empty-state {
+  margin: 0;
+  color: #9fb0c7;
+}
+
 input[type="text"] {
   width: 100%;
   border: 1px solid #334155;
@@ -258,6 +376,30 @@ button:disabled {
   }
 
   .chat-form {
+    grid-template-columns: 1fr;
+  }
+
+  .brand {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .brand-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .secondary-btn {
+    flex: 1;
+  }
+
+  .recent-shell {
+    border-radius: 10px;
+    min-height: 100vh;
+    max-height: none;
+  }
+
+  .day-grid {
     grid-template-columns: 1fr;
   }
 
