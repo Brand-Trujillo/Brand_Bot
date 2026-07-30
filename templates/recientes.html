@@ -30,6 +30,7 @@
         <div class="brand-actions">
           <button id="refresh-btn" type="button" class="secondary-btn">Actualizar</button>
           <a class="secondary-btn" href="{{ url_for('index') }}">Volver al chat</a>
+          <a class="whatsapp-btn" href="https://wa.me/573123894917" target="_blank" rel="noopener noreferrer">WhatsApp</a>
         </div>
       </header>
 
@@ -40,6 +41,8 @@
       <section id="recent-days" class="recent-days" aria-live="polite"></section>
     </section>
   </main>
+
+  <a class="whatsapp-fab" href="https://wa.me/573123894917" target="_blank" rel="noopener noreferrer" aria-label="Abrir WhatsApp">WhatsApp</a>
 
   <script src="{{ url_for('static', filename='recientes.js') }}?v={{ app_version }}"></script>
 </body>

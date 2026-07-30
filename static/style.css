@@ -118,9 +118,9 @@ body {
   min-height: 34px;
   padding: 6px 12px;
   border-radius: 10px;
-  border: 1px solid #3b4f69;
-  background: #0f1a2d;
-  color: #d6e8ff;
+  border: 0;
+  background: linear-gradient(120deg, var(--accent), #19b5fe);
+  color: #052013;
   text-decoration: none;
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -129,8 +129,62 @@ body {
 }
 
 .secondary-btn:hover {
-  border-color: #5c7ca3;
-  background: #13233b;
+  filter: brightness(1.06) saturate(1.03);
+}
+
+.whatsapp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 0;
+  background: linear-gradient(120deg, #25d366, #128c7e);
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.whatsapp-btn:hover {
+  filter: brightness(1.06) saturate(1.03);
+}
+
+.whatsapp-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 35;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(120deg, #25d366, #128c7e);
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  box-shadow: 0 12px 28px #00000066;
+}
+
+.whatsapp-fab:hover {
+  filter: brightness(1.06) saturate(1.03);
+}
+
+@media (max-width: 680px) {
+  .whatsapp-fab {
+    right: 10px;
+    bottom: 10px;
+    min-height: 42px;
+    padding: 0 14px;
+    font-size: 0.82rem;
+  }
 }
 
 .version-badge {
@@ -285,6 +339,23 @@ body {
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 0.84rem;
+}
+
+.day-table th:nth-child(1),
+.day-table td:nth-child(1) {
+  width: 70px;
+  font-size: 0.74rem;
+}
+
+.day-table th:nth-child(3),
+.day-table td:nth-child(3) {
+  width: 18%;
+}
+
+.day-table th:nth-child(9),
+.day-table td:nth-child(9) {
+  width: 52px;
+  text-align: center;
 }
 
 .day-table th,
