@@ -4,6 +4,7 @@ const refreshBtn = document.getElementById('refresh-btn');
 const backendVersionEl = document.getElementById('backend-version');
 
 const AUTO_REFRESH_MS = 20000;
+const WEEKDAY_ORDER = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'];
 
 function escapeHtml(text) {
   return String(text || '')
@@ -12,6 +13,16 @@ function escapeHtml(text) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function formatShortDate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'N/E';
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return raw;
+  const month = match[2];
+  const day = match[3];
+  return `${month}-${day}`;
 }
 
 function renderBadge(version, commit) {
@@ -27,7 +38,7 @@ function renderRow(item) {
   const fallback = 'N/E';
   return `
     <tr>
-      <td>${escapeHtml(item.fecha || fallback)}</td>
+      <td>${escapeHtml(item.fecha_corta || formatShortDate(item.fecha || fallback))}</td>
       <td>${escapeHtml(item.cliente || fallback)}</td>
       <td>${escapeHtml(item.descripcion || fallback)}</td>
       <td>${escapeHtml(item.marca || fallback)}</td>
@@ -40,13 +51,43 @@ function renderRow(item) {
   `;
 }
 
+function orderDaysFromToday(days) {
+  if (!Array.isArray(days) || days.length === 0) return [];
+
+  const byKey = new Map(days.map((d) => [String(d.key || '').toLowerCase(), d]));
+  const jsWeekday = new Date().getDay(); // 0=domingo, 1=lunes ... 6=sabado
+
+  let startIndex = 0;
+  if (jsWeekday >= 1 && jsWeekday <= 5) {
+    startIndex = jsWeekday - 1;
+  }
+
+  const rotatedKeys = WEEKDAY_ORDER.slice(startIndex).concat(WEEKDAY_ORDER.slice(0, startIndex));
+  const ordered = [];
+
+  rotatedKeys.forEach((key) => {
+    if (byKey.has(key)) {
+      ordered.push(byKey.get(key));
+    }
+  });
+
+  days.forEach((day) => {
+    if (!ordered.includes(day)) {
+      ordered.push(day);
+    }
+  });
+
+  return ordered;
+}
+
 function renderDays(days) {
-  if (!Array.isArray(days) || days.length === 0) {
+  const orderedDays = orderDaysFromToday(days);
+  if (!Array.isArray(orderedDays) || orderedDays.length === 0) {
     daysEl.innerHTML = '<p class="empty-state">No hay informacion disponible por ahora.</p>';
     return;
   }
 
-  daysEl.innerHTML = days.map((day) => {
+  daysEl.innerHTML = orderedDays.map((day) => {
     const items = Array.isArray(day.items) ? day.items : [];
     const rowsHtml = items.length > 0
       ? items.map(renderRow).join('')
@@ -70,7 +111,7 @@ function renderDays(days) {
                 <th>Referencia externa</th>
                 <th>Informe</th>
                 <th>Cotizacion</th>
-                <th>N° muestras</th>
+                <th>N°</th>
               </tr>
             </thead>
             <tbody>${rowsHtml}</tbody>

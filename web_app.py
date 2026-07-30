@@ -14,7 +14,7 @@ from datos import (
 import evolution_api
 
 app = Flask(__name__)
-APP_VERSION = "20260730a"
+APP_VERSION = "20260730b"
 DEPLOY_COMMIT = os.getenv("RENDER_GIT_COMMIT", "local")
 
 WEEKDAY_LABELS = {
@@ -24,6 +24,29 @@ WEEKDAY_LABELS = {
     3: "Jueves",
     4: "Viernes",
 }
+
+
+def _ordenar_dias_desde_hoy(days: list[dict]) -> list[dict]:
+    if not days:
+        return []
+
+    by_key = {str(day.get("key", "")).strip().lower(): day for day in days}
+    weekday = datetime.now().weekday()  # 0=lunes ... 6=domingo
+    start_index = weekday if 0 <= weekday <= 4 else 0
+    ordered_keys = ["lunes", "martes", "miercoles", "jueves", "viernes"]
+    rotated = ordered_keys[start_index:] + ordered_keys[:start_index]
+
+    ordered = []
+    for key in rotated:
+        day = by_key.get(key)
+        if day:
+            ordered.append(day)
+
+    for day in days:
+        if day not in ordered:
+            ordered.append(day)
+
+    return ordered
 
 
 def _value_text(value) -> str:
@@ -80,6 +103,7 @@ def _build_recientes_payload(limit_per_day: int = 20) -> dict:
             items.append(
                 {
                     "fecha": row["_fecha_ingreso"].strftime("%Y-%m-%d"),
+                    "fecha_corta": row["_fecha_ingreso"].strftime("%m-%d"),
                     "cliente": _value_text(row.get("CLIENTE")),
                     "descripcion": _value_text(row.get("DESCRIPCION")),
                     "marca": _value_text(row.get("MARCA")),
@@ -109,7 +133,7 @@ def _build_recientes_payload(limit_per_day: int = 20) -> dict:
         "updated_at": datetime.utcnow().isoformat() + "Z",
         "source": obtener_fuente_datos(),
         "total_items": total_items,
-        "days": days,
+        "days": _ordenar_dias_desde_hoy(days),
     }
 
 
