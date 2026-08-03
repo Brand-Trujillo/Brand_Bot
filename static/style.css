@@ -153,40 +153,6 @@ body {
   filter: brightness(1.06) saturate(1.03);
 }
 
-.whatsapp-fab {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 35;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 0 16px;
-  border-radius: 999px;
-  border: 0;
-  background: linear-gradient(120deg, #25d366, #128c7e);
-  color: #ffffff;
-  text-decoration: none;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  box-shadow: 0 12px 28px #00000066;
-}
-
-.whatsapp-fab:hover {
-  filter: brightness(1.06) saturate(1.03);
-}
-
-@media (max-width: 680px) {
-  .whatsapp-fab {
-    right: 10px;
-    bottom: 10px;
-    min-height: 42px;
-    padding: 0 14px;
-    font-size: 0.82rem;
-  }
-}
-
 .version-badge {
   display: inline-block;
   margin-left: 10px;
