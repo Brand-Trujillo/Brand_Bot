@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Brand_Bot</string>
+    <string name="brand_title">Brand_Bot</string>
+    <string name="brand_subtitle">Asistente virtual de Brandon</string>
+    <string name="connection_error">No fue posible cargar el chatbot. Verifica conexion y URL.</string>
+    <string name="invalid_url_error">Configura una URL valida en BuildConfig.CHATBOT_URL antes de compilar.</string>
+</resources>
