@@ -4,6 +4,20 @@ const chat = document.getElementById('chat');
 const sendBtn = document.getElementById('send-btn');
 const backendVersionEl = document.getElementById('backend-version');
 
+function scrollChatToBottom(smooth = false) {
+  if (!chat) return;
+  const behavior = smooth ? 'smooth' : 'auto';
+
+  // En WebView movil el alto puede ajustarse despues del primer paint.
+  const apply = () => {
+    chat.scrollTo({ top: chat.scrollHeight, behavior });
+  };
+
+  apply();
+  requestAnimationFrame(apply);
+  setTimeout(apply, 120);
+}
+
 async function initBackendVersionBadge() {
   if (!backendVersionEl) return;
 
@@ -44,7 +58,7 @@ function addBubble(role, text, shouldScroll = true) {
   article.appendChild(p);
   chat.appendChild(article);
   if (shouldScroll) {
-    chat.scrollTop = chat.scrollHeight;
+    scrollChatToBottom();
   }
   return article;
 }
@@ -99,18 +113,10 @@ form.addEventListener('submit', async (event) => {
   try {
     const result = await sendMessage(message);
     if (Array.isArray(result.replies) && result.replies.length > 0) {
-      let firstReplyBubble = null;
       result.replies.forEach((item) => {
-        const bubble = addBotReplyAsBubbles(item, false);
-        if (!firstReplyBubble && bubble) {
-          firstReplyBubble = bubble;
-        }
+        addBotReplyAsBubbles(item, false);
       });
-      if (firstReplyBubble) {
-        requestAnimationFrame(() => {
-          firstReplyBubble.scrollIntoView({ block: 'start', behavior: 'smooth' });
-        });
-      }
+      scrollChatToBottom(true);
     } else {
       // Fallback minimo para compatibilidad.
       addBotReplyAsBubbles(result.reply);
