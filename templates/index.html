@@ -13,6 +13,18 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  <div id="startup-splash" class="startup-splash" aria-live="polite" aria-label="Cargando Brand_Bot">
+    <div class="startup-splash__card">
+      <img
+        class="startup-splash__logo"
+        src="{{ url_for('static', filename='brandbot-splash.png') }}?v={{ app_version }}"
+        alt="Logo de Brand_Bot"
+      >
+      <h2>Brand_Bot</h2>
+      <p>Asistente virtual de Brandon</p>
+    </div>
+  </div>
+
   <div class="bg-shape bg-shape-a"></div>
   <div class="bg-shape bg-shape-b"></div>
 

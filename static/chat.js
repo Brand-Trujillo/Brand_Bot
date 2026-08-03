@@ -3,6 +3,30 @@ const input = document.getElementById('message');
 const chat = document.getElementById('chat');
 const sendBtn = document.getElementById('send-btn');
 const backendVersionEl = document.getElementById('backend-version');
+const splashEl = document.getElementById('startup-splash');
+
+const SPLASH_MIN_MS = 1300;
+const SPLASH_MAX_MS = 2600;
+const splashStartTs = Date.now();
+let splashIsHidden = false;
+
+function hideStartupSplash() {
+  if (!splashEl || splashIsHidden) return;
+  splashIsHidden = true;
+  splashEl.classList.add('startup-splash--hidden');
+
+  // Se remueve del DOM cuando termina la transicion para evitar capas superpuestas.
+  setTimeout(() => {
+    splashEl.remove();
+  }, 420);
+}
+
+function scheduleSplashHide() {
+  if (!splashEl || splashIsHidden) return;
+  const elapsed = Date.now() - splashStartTs;
+  const waitMs = Math.max(0, SPLASH_MIN_MS - elapsed);
+  setTimeout(hideStartupSplash, waitMs);
+}
 
 function scrollChatToBottom(smooth = false) {
   if (!chat) return;
@@ -130,3 +154,8 @@ form.addEventListener('submit', async (event) => {
 });
 
 initBackendVersionBadge();
+
+window.addEventListener('load', scheduleSplashHide);
+
+// Fallback por si el evento load tarda demasiado en algunas conexiones.
+setTimeout(hideStartupSplash, SPLASH_MAX_MS);

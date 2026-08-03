@@ -152,6 +152,7 @@ def favicon_ico():
     # Compatibilidad robusta: intenta archivos locales y, si faltan,
     # responde un SVG embebido para evitar 404 en producción.
     for filename, mimetype in (
+        ("brandbot-splash.png", "image/png"),
         ("favicon.ico", "image/x-icon"),
     ):
         if os.path.exists(os.path.join(app.static_folder, filename)):
