@@ -12,6 +12,9 @@ Edita [app/build.gradle.kts](app/build.gradle.kts) y cambia `CHATBOT_URL` en deb
 Ejemplo:
 - https://tu-chatbot.onrender.com
 
+Si dejas la URL de ejemplo, la app te pedira la URL al abrirse.
+Tambien puedes cambiarla despues dejando presionada la barra superior (titulo/subtitulo).
+
 ## Compilar localmente
 Requisitos:
 - Android Studio (recomendado) o Android SDK + JDK 17

@@ -4,5 +4,10 @@
     <string name="brand_title">Brand_Bot</string>
     <string name="brand_subtitle">Asistente virtual de Brandon</string>
     <string name="connection_error">No fue posible cargar el chatbot. Verifica conexion y URL.</string>
-    <string name="invalid_url_error">Configura una URL valida en BuildConfig.CHATBOT_URL antes de compilar.</string>
+    <string name="invalid_url_error">URL invalida. Usa una URL HTTPS valida de tu chatbot.</string>
+    <string name="url_dialog_title">Configurar URL del chatbot</string>
+    <string name="url_dialog_message">Pega la URL publica de tu bot (ejemplo: https://tu-chatbot.onrender.com). Mantén presionada la barra superior para cambiarla luego.</string>
+    <string name="url_hint">https://tu-chatbot.onrender.com</string>
+    <string name="save_label">Guardar</string>
+    <string name="cancel_label">Cancelar</string>
 </resources>
