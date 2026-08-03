@@ -5,8 +5,8 @@ const sendBtn = document.getElementById('send-btn');
 const backendVersionEl = document.getElementById('backend-version');
 const splashEl = document.getElementById('startup-splash');
 
-const SPLASH_MIN_MS = 1300;
-const SPLASH_MAX_MS = 2600;
+const SPLASH_MIN_MS = 6300;
+const SPLASH_MAX_MS = 7600;
 const splashStartTs = Date.now();
 let splashIsHidden = false;
 
