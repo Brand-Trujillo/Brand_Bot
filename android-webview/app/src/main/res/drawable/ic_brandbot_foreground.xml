@@ -5,7 +5,25 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Bloque oscuro para que el icono se perciba mas encuadrado -->
+    <!-- Marco interno redondeado para efecto encuadrado -->
+    <path
+        android:fillColor="#0C1528"
+        android:pathData="M12,8h84c8.8,0 16,7.2 16,16v60c0,8.8 -7.2,16 -16,16H12c-8.8,0 -16,-7.2 -16,-16V24c0,-8.8 7.2,-16 16,-16z" />
+
+    <!-- Aro turquesa de fondo -->
+    <path
+        android:fillColor="#1E2E49"
+        android:pathData="M54,18a30,30 0 1,1 0,60a30,30 0 1,1 0,-60z" />
+    <path
+        android:fillColor="#0C1528"
+        android:pathData="M54,22a26,26 0 1,1 0,52a26,26 0 1,1 0,-52z" />
+    <path
+        android:fillColor="#22D3C5"
+        android:pathData="M54,20a28,28 0 1,1 0,56a28,28 0 1,1 0,-56z" />
+    <path
+        android:fillColor="#0C1528"
+        android:pathData="M54,24a24,24 0 1,1 0,48a24,24 0 1,1 0,-48z" />
+
     <path
         android:fillColor="#101A2C"
         android:pathData="M18,10h72c8.8,0 16,7.2 16,16v56c0,8.8 -7.2,16 -16,16H18c-8.8,0 -16,-7.2 -16,-16V26c0,-8.8 7.2,-16 16,-16z" />
