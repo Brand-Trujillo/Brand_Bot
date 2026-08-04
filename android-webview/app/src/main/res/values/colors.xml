@@ -3,5 +3,6 @@
     <color name="brand_dark">#101A2C</color>
     <color name="brand_muted">#A7B4CF</color>
     <color name="brand_teal">#22D3C5</color>
+    <color name="icon_canvas">#F5F8FF</color>
     <color name="white">#FFFFFFFF</color>
 </resources>
