@@ -264,15 +264,18 @@ def _numero_muestras_texto(fila) -> str:
         "NUM_MUESTRAS",
         "CANTIDAD_MUESTRAS",
         "MUESTRAS",
+        "CANTIDAD",
+        "CANT",
+        "NUM",
     ]
     for clave in claves_directas:
-        valor = _valor_texto(fila.get(clave))
-        if valor:
+        valor = _campo_valor_texto(fila, clave)
+        if valor != "N/E":
             return valor
 
     for clave in fila.index:
         clave_norm = re.sub(r"[^A-Z0-9]", "", str(clave).upper())
-        if "MUESTRA" in clave_norm:
+        if any(palabra in clave_norm for palabra in ["MUESTRA", "CANTIDAD", "NUMERO", "NUM"]):
             valor = _valor_texto(fila.get(clave))
             if valor:
                 return valor
@@ -281,9 +284,24 @@ def _numero_muestras_texto(fila) -> str:
 
 
 def _campo_valor_texto(fila, *campos: str) -> str:
+    objetivos = []
     for campo in campos:
-        if campo in fila.index:
-            valor = _valor_texto(fila.get(campo))
+        campo_norm = re.sub(r"[^a-z0-9]", "", str(campo).lower())
+        if campo_norm and campo_norm not in objetivos:
+            objetivos.append(campo_norm)
+
+    for columna in fila.index:
+        columna_norm = re.sub(r"[^a-z0-9]", "", str(columna).lower())
+        if not columna_norm:
+            continue
+        if any(
+            columna_norm == objetivo
+            or columna_norm.startswith(objetivo)
+            or objetivo.startswith(columna_norm)
+            or objetivo in columna_norm
+            for objetivo in objetivos
+        ):
+            valor = _valor_texto(fila.get(columna))
             if valor:
                 return valor
     return "N/E"

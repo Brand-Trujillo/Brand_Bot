@@ -3,7 +3,7 @@ import unittest
 import pandas as pd
 
 from buscador import buscar
-from chatbot_service import _ordenar_primera_muestra, _texto_confirmacion
+from chatbot_service import _campo_valor_texto, _numero_muestras_texto, _ordenar_primera_muestra, _texto_confirmacion
 
 
 class TestBuscadorQuality(unittest.TestCase):
@@ -220,6 +220,19 @@ class TestBuscadorQuality(unittest.TestCase):
 
     def test_confirmacion_sencilla(self):
         self.assertEqual(_texto_confirmacion("21961", "referencia", "neutral"), "Voy a buscar por referencia: 21961.")
+
+    def test_campos_pluralizados_y_cantidad(self):
+        fila = pd.Series(
+            {
+                "Informes": "0753",
+                "Cotizaciones": "0735",
+                "Cantidad": 1,
+            }
+        )
+
+        self.assertEqual(_campo_valor_texto(fila, "INFORME", "NUMERO_INFORME", "numeroInforme"), "0753")
+        self.assertEqual(_campo_valor_texto(fila, "COTIZACION", "NUMERO_COTIZACION", "numeroCotizacion"), "0735")
+        self.assertEqual(_numero_muestras_texto(fila), "1")
 
 
 if __name__ == "__main__":
