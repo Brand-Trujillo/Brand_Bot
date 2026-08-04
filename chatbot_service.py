@@ -257,6 +257,29 @@ def _fecha_texto(valor):
     return str(valor)
 
 
+def _numero_muestras_texto(fila) -> str:
+    claves_directas = [
+        "NUMERO",
+        "N_MUESTRAS",
+        "NUM_MUESTRAS",
+        "CANTIDAD_MUESTRAS",
+        "MUESTRAS",
+    ]
+    for clave in claves_directas:
+        valor = _valor_texto(fila.get(clave))
+        if valor:
+            return valor
+
+    for clave in fila.index:
+        clave_norm = re.sub(r"[^A-Z0-9]", "", str(clave).upper())
+        if "MUESTRA" in clave_norm:
+            valor = _valor_texto(fila.get(clave))
+            if valor:
+                return valor
+
+    return "N/E"
+
+
 def _marca_texto(fila) -> str:
     marca = _valor_texto(fila.get("MARCA"))
     cliente = _valor_texto(fila.get("CLIENTE"))
@@ -311,7 +334,7 @@ def _resumen_fila(fila) -> str:
         f"Referencia / Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))}\n"
         f"Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}\n"
         f"Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))}\n"
-        f"N° muestras: {_valor_texto(fila.get('NUMERO'))}\n"
+        f"N° muestras: {_numero_muestras_texto(fila)}\n"
         f"Informe: {_valor_texto(fila.get('INFORME'))}\n"
         f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
         f"Estado: {_valor_texto(fila.get('ESTADO'))}\n"
@@ -370,6 +393,7 @@ def _resumen_corto(fila, intencion: str) -> str:
     return (
         f"Cliente: {_valor_texto(fila.get('CLIENTE'))} | "
         f"Ref. interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))} | "
+        f"N° muestras: {_numero_muestras_texto(fila)} | "
         f"Informe: {_valor_texto(fila.get('INFORME'))} | "
         f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
         f"{_campo_por_intencion(fila, intencion)}"
@@ -385,7 +409,7 @@ def _resumen_muestra_multiple(fila) -> str:
         f"Referencia / Modelo: {_valor_texto(fila.get('REFERENCIA_MODELO'))}\n"
         f"Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}\n"
         f"Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))}\n"
-        f"N° muestras: {_valor_texto(fila.get('NUMERO'))}\n"
+        f"N° muestras: {_numero_muestras_texto(fila)}\n"
         f"Informe: {_valor_texto(fila.get('INFORME'))}\n"
         f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
         f"Estado: {_valor_texto(fila.get('ESTADO'))}\n"

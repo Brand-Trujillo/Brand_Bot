@@ -226,7 +226,7 @@ body {
   padding: 14px;
   overflow-y: auto;
   min-height: 0;
-  padding-bottom: 92px;
+  padding-bottom: var(--chat-feed-bottom-space, 92px);
   display: grid;
   gap: 10px;
 }
@@ -512,7 +512,7 @@ button:disabled {
   }
 
   .chat-feed {
-    padding: 10px 8px;
+    padding: 10px 8px var(--chat-feed-bottom-space, 120px);
   }
 
   .chat-form {

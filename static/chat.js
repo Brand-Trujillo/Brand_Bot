@@ -4,6 +4,7 @@ const chat = document.getElementById('chat');
 const sendBtn = document.getElementById('send-btn');
 const backendVersionEl = document.getElementById('backend-version');
 const splashEl = document.getElementById('startup-splash');
+const chatForm = document.getElementById('chat-form');
 
 const SPLASH_MIN_MS = 6300;
 const SPLASH_MAX_MS = 7600;
@@ -28,8 +29,18 @@ function scheduleSplashHide() {
   setTimeout(hideStartupSplash, waitMs);
 }
 
+function syncChatBottomSpace() {
+  if (!chat || !chatForm) return;
+  const formHeight = Math.ceil(chatForm.getBoundingClientRect().height || 0);
+  const extraGap = 22;
+  const minSpace = 110;
+  const needed = Math.max(minSpace, formHeight + extraGap);
+  chat.style.setProperty('--chat-feed-bottom-space', `${needed}px`);
+}
+
 function scrollChatToBottom(smooth = false) {
   if (!chat) return;
+  syncChatBottomSpace();
   const behavior = smooth ? 'smooth' : 'auto';
 
   // En WebView movil el alto puede ajustarse despues del primer paint.
@@ -154,6 +165,13 @@ form.addEventListener('submit', async (event) => {
 });
 
 initBackendVersionBadge();
+syncChatBottomSpace();
+window.addEventListener('resize', syncChatBottomSpace);
+window.visualViewport?.addEventListener('resize', syncChatBottomSpace);
+input?.addEventListener('focus', () => {
+  syncChatBottomSpace();
+  scrollChatToBottom(true);
+});
 
 window.addEventListener('load', scheduleSplashHide);
 
