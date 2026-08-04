@@ -280,6 +280,15 @@ def _numero_muestras_texto(fila) -> str:
     return "N/E"
 
 
+def _campo_valor_texto(fila, *campos: str) -> str:
+    for campo in campos:
+        if campo in fila.index:
+            valor = _valor_texto(fila.get(campo))
+            if valor:
+                return valor
+    return "N/E"
+
+
 def _marca_texto(fila) -> str:
     marca = _valor_texto(fila.get("MARCA"))
     cliente = _valor_texto(fila.get("CLIENTE"))
@@ -335,8 +344,8 @@ def _resumen_fila(fila) -> str:
         f"Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}\n"
         f"Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA'))}\n"
         f"N° muestras: {_numero_muestras_texto(fila)}\n"
-        f"Informe: {_valor_texto(fila.get('INFORME'))}\n"
-        f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
+        f"Informe: {_campo_valor_texto(fila, 'INFORME', 'NUMERO_INFORME', 'numeroInforme')}\n"
+        f"Cotizacion: {_campo_valor_texto(fila, 'COTIZACION', 'NUMERO_COTIZACION', 'numeroCotizacion')}\n"
         f"Estado: {_valor_texto(fila.get('ESTADO'))}\n"
         f"Ubicacion: {_valor_texto(fila.get('UBICACION'))}\n"
         f"Fecha recepcion: {fecha}"
@@ -368,9 +377,9 @@ def _campo_por_intencion(fila, intencion: str) -> str:
     if intencion == "marca":
         return f"Marca: {_valor_texto(fila.get('MARCA'))}"
     if intencion == "informe":
-        return f"Informe: {_valor_texto(fila.get('INFORME'))}"
+        return f"Informe: {_campo_valor_texto(fila, 'INFORME', 'NUMERO_INFORME', 'numeroInforme')}"
     if intencion == "cotizacion":
-        return f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}"
+        return f"Cotizacion: {_campo_valor_texto(fila, 'COTIZACION', 'NUMERO_COTIZACION', 'numeroCotizacion')}"
 
     return (
         f"Estado: {_valor_texto(fila.get('ESTADO'))} | "
@@ -394,8 +403,8 @@ def _resumen_corto(fila, intencion: str) -> str:
         f"Cliente: {_valor_texto(fila.get('CLIENTE'))} | "
         f"Ref. interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))} | "
         f"N° muestras: {_numero_muestras_texto(fila)} | "
-        f"Informe: {_valor_texto(fila.get('INFORME'))} | "
-        f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
+        f"Informe: {_campo_valor_texto(fila, 'INFORME', 'NUMERO_INFORME', 'numeroInforme')} | "
+        f"Cotizacion: {_campo_valor_texto(fila, 'COTIZACION', 'NUMERO_COTIZACION', 'numeroCotizacion')}\n"
         f"{_campo_por_intencion(fila, intencion)}"
     )
 
@@ -410,8 +419,8 @@ def _resumen_muestra_multiple(fila) -> str:
         f"Referencia externa: {_valor_texto(fila.get('REFERENCIA_EXTERNA'))}\n"
         f"Referencia interna: {_valor_texto(fila.get('REFERENCIA_INTERNA') or fila.get('ID'))}\n"
         f"N° muestras: {_numero_muestras_texto(fila)}\n"
-        f"Informe: {_valor_texto(fila.get('INFORME'))}\n"
-        f"Cotizacion: {_valor_texto(fila.get('COTIZACION'))}\n"
+        f"Informe: {_campo_valor_texto(fila, 'INFORME', 'NUMERO_INFORME', 'numeroInforme')}\n"
+        f"Cotizacion: {_campo_valor_texto(fila, 'COTIZACION', 'NUMERO_COTIZACION', 'numeroCotizacion')}\n"
         f"Estado: {_valor_texto(fila.get('ESTADO'))}\n"
         f"Ubicacion: {_valor_texto(fila.get('UBICACION'))}\n"
         f"Fecha recepcion: {fecha}"
